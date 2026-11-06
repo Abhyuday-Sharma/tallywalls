@@ -24,3 +24,8 @@ ENV/
 .DS_Store
 Thumbs.db
 
+
+# PyInstaller build artifacts and distribution archives
+dist/
+build/
+*.zip

@@ -104,12 +104,19 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def _find_dir(dir_name: str, fallback_relative: str) -> str:
-    candidates = [
+    candidates = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.extend([
+            os.path.join(meipass, "app", dir_name),
+            os.path.join(meipass, dir_name)
+        ])
+    candidates.extend([
         os.path.join(BASE_DIR, dir_name),
         os.path.join(os.path.dirname(BASE_DIR), dir_name),
         os.path.join(os.getcwd(), dir_name),
         os.path.join(os.getcwd(), "app", dir_name)
-    ]
+    ])
     for c in candidates:
         if os.path.isdir(c):
             return c
@@ -339,6 +346,7 @@ async def serve_index():
 async def serve_terms_guide():
     """Serve statutory GST financial definitions and reconciliation rulebook."""
     candidates = [
+        os.path.join(getattr(sys, "_MEIPASS", ""), "gst_financial_terms_guide.html"),
         os.path.join(os.path.dirname(BASE_DIR), "gst_financial_terms_guide.html"),
         os.path.join(os.getcwd(), "gst_financial_terms_guide.html"),
         os.path.join(STATIC_DIR, "gst_financial_terms_guide.html")

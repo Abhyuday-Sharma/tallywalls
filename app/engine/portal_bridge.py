@@ -1085,6 +1085,41 @@ def consolidate_gstr2b_statements(file_paths: List[str], fy: str = "2026-27") ->
     return merged_df
 
 
+def _launch_browser(playwright_instance) -> Any:
+    """
+    Intelligently launch browser with resilient Windows fallback:
+    1. Try bundled or default Chromium.
+    2. Try pre-installed Microsoft Edge (channel='msedge') on Windows.
+    3. Try pre-installed Google Chrome (channel='chrome').
+    """
+    args = [
+        "--start-maximized",
+        "--disable-blink-features=AutomationControlled"
+    ]
+    # 1. Try default Chromium
+    try:
+        return playwright_instance.chromium.launch(headless=False, args=args)
+    except Exception:
+        pass
+
+    # 2. Try Microsoft Edge (built-in on 100% of Windows 10/11 machines)
+    try:
+        return playwright_instance.chromium.launch(channel="msedge", headless=False, args=args)
+    except Exception:
+        pass
+
+    # 3. Try Google Chrome
+    try:
+        return playwright_instance.chromium.launch(channel="chrome", headless=False, args=args)
+    except Exception:
+        pass
+
+    raise RuntimeError(
+        "Could not launch browser (Chromium, Edge, or Chrome). "
+        "Please ensure Microsoft Edge or Google Chrome is installed on this PC."
+    )
+
+
 def execute_portal_bridge_sync(
     fy: str,
     return_period: str,
@@ -1121,13 +1156,7 @@ def execute_portal_bridge_sync(
         password = password or stored_creds.get("password", "")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=False,
-            args=[
-                "--start-maximized",
-                "--disable-blink-features=AutomationControlled"
-            ]
-        )
+        browser = _launch_browser(p)
         context = browser.new_context(
             no_viewport=True,
             accept_downloads=True,
@@ -1470,13 +1499,7 @@ def execute_multi_month_portal_bridge_sync(
         password = password or stored_creds.get("password", "")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=False,
-            args=[
-                "--start-maximized",
-                "--disable-blink-features=AutomationControlled"
-            ]
-        )
+        browser = _launch_browser(p)
         context = browser.new_context(
             no_viewport=True,
             accept_downloads=True,
