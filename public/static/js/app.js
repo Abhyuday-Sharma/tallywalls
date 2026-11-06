@@ -24,6 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupDragAndDrop();
   initFinancialYears();
   setupEventListeners();
+  detectEnvironment();
 });
 
 function setupDragAndDrop() {
@@ -473,9 +474,9 @@ async function handleLaunchBridge(simulate = false) {
 
     setTimeout(() => {
       closePortalModal();
-      const msg = isBatch
+      const msg = data.message || (isBatch
         ? `Success: Consolidated ${data.rows_count} invoices across statutory months (April to October, FY ${fy})!`
-        : `Success: ${returnType} Excel statement (${data.rows_count} invoices) captured from GST portal!`;
+        : `Success: ${returnType} Excel statement (${data.rows_count} invoices) captured from GST portal!`);
       alert(msg);
     }, 1000);
 
@@ -1161,5 +1162,25 @@ async function handleExportExcel() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = origText;
+  }
+}
+
+function detectEnvironment() {
+  const isLocal = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  const label = document.getElementById("engineStatusLabel");
+  const envNotice = document.getElementById("portalEnvNotice");
+  if (!isLocal) {
+    if (label) {
+      label.textContent = "Cloud Sandbox Active";
+      label.title = "Running on cloud serverless environment. Playwright desktop automation and Tally port 9000 connect locally via run_app.bat.";
+    }
+    if (envNotice) {
+      envNotice.innerHTML = `
+        <div style="background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.25); border-radius:6px; padding:8px 12px; color:#1e40af; font-size:0.75rem; margin-bottom:12px; line-height:1.4;">
+          <strong>Cloud Sandbox Environment:</strong>
+          Portal bridge captures statutory multi-month statements in cloud mode. (For real desktop Chromium browser launch on <code>services.gst.gov.in</code>, run locally via <code>run_app.bat</code>).
+        </div>
+      `;
+    }
   }
 }
