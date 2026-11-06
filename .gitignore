@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local credential caches and temporary test screenshots
+app/cache/
+*.enc
+test_login_shot.png
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Temporary and log files
+*.log
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
