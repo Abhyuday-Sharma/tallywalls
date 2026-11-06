@@ -107,9 +107,9 @@
 
     
     .brand-logo-img {
-      height: 32px;
+      height: 36px;
       width: auto;
-      max-width: 165px;
+      max-height: 40px;
       object-fit: contain;
       display: block;
     }
