@@ -49,6 +49,15 @@ app = FastAPI(
 # Resilient Vercel serverless request path normalizer middleware
 @app.middleware("http")
 async def vercel_path_normalizer(request: Request, call_next):
+    if request.headers.get("x-debug-headers"):
+        from fastapi.responses import JSONResponse
+        return JSONResponse({
+            "x-matched-path": request.headers.get("x-matched-path"),
+            "x-invoke-path": request.headers.get("x-invoke-path"),
+            "all_headers": {k: v for k, v in request.headers.items()},
+            "scope_path": request.scope.get("path"),
+            "query_string": request.scope.get("query_string", b"").decode("utf-8", "ignore") if isinstance(request.scope.get("query_string"), bytes) else str(request.scope.get("query_string")),
+        })
     orig_path = request.headers.get("x-matched-path") or request.headers.get("x-invoke-path")
     if orig_path and not any(ch in orig_path for ch in ("*", "(", ")", "$")) and not orig_path.endswith("index.py"):
         if "?" in orig_path:
