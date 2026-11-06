@@ -47,8 +47,21 @@ app.add_middleware(
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-SAMPLE_DIR = os.path.join(os.path.dirname(BASE_DIR), "sample_data")
+
+def _find_dir(dir_name: str, fallback_relative: str) -> str:
+    candidates = [
+        os.path.join(BASE_DIR, dir_name),
+        os.path.join(os.path.dirname(BASE_DIR), dir_name),
+        os.path.join(os.getcwd(), dir_name),
+        os.path.join(os.getcwd(), "app", dir_name)
+    ]
+    for c in candidates:
+        if os.path.isdir(c):
+            return c
+    return os.path.normpath(os.path.join(BASE_DIR, fallback_relative))
+
+STATIC_DIR = _find_dir("static", "static")
+SAMPLE_DIR = _find_dir("sample_data", os.path.join("..", "sample_data"))
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -259,6 +272,21 @@ async def serve_index():
             }
         )
     return HTMLResponse(content="<h1>Dashboard index.html not found.</h1>", status_code=404)
+
+
+@app.get("/gst_financial_terms_guide.html", response_class=HTMLResponse)
+async def serve_terms_guide():
+    """Serve statutory GST financial definitions and reconciliation rulebook."""
+    candidates = [
+        os.path.join(os.path.dirname(BASE_DIR), "gst_financial_terms_guide.html"),
+        os.path.join(os.getcwd(), "gst_financial_terms_guide.html"),
+        os.path.join(STATIC_DIR, "gst_financial_terms_guide.html")
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
+                return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Statutory Terms Guide Not Found</h1>", status_code=404)
 
 
 @app.exception_handler(Exception)

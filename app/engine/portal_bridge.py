@@ -21,10 +21,29 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache")
+def _resolve_cache_dir() -> str:
+    default_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache")
+    try:
+        os.makedirs(default_dir, exist_ok=True)
+        test_file = os.path.join(default_dir, ".write_test")
+        with open(test_file, "w") as f:
+            f.write("ok")
+        os.remove(test_file)
+        return default_dir
+    except (OSError, PermissionError):
+        tmp_dir = os.path.join(tempfile.gettempdir(), "tallywalls_cache")
+        try:
+            os.makedirs(tmp_dir, exist_ok=True)
+        except Exception:
+            pass
+        return tmp_dir
+
+CACHE_DIR = _resolve_cache_dir()
 DOWNLOADS_DIR = os.path.join(CACHE_DIR, "downloads")
-os.makedirs(CACHE_DIR, exist_ok=True)
-os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+try:
+    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+except Exception:
+    pass
 
 CRED_FILE = os.path.join(CACHE_DIR, "portal_profile.enc")
 
@@ -37,7 +56,7 @@ def _get_encryption_key() -> bytes:
         salt=salt,
         iterations=100000,
     )
-    machine_id = os.environ.get("USERNAME", "DefaultUser").encode()
+    machine_id = os.environ.get("USERNAME", os.environ.get("USER", "DefaultUser")).encode()
     return base64.urlsafe_b64encode(kdf.derive(machine_id))
 
 
@@ -1082,7 +1101,13 @@ def execute_portal_bridge_sync(
     and runs a dual listener (Playwright download event + local filesystem watcher)
     to capture GSTR-2B whether triggered by automation or direct user click.
     """
-    from playwright.sync_api import sync_playwright
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        raise RuntimeError(
+            "Playwright browser automation is configured for local desktop operation (via run_app.bat). "
+            "In cloud or serverless environments, please use Direct File Upload or Load Enterprise Demo mode."
+        )
 
     login_url = "https://services.gst.gov.in/services/login"
     start_time = time.time()
@@ -1426,7 +1451,13 @@ def execute_multi_month_portal_bridge_sync(
        - Safely returns to Dashboard via in-page navigation (never page.go_back)
     5. Consolidates all 7 monthly Excel statements into a single unified audit dataset.
     """
-    from playwright.sync_api import sync_playwright
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        raise RuntimeError(
+            "Playwright browser automation is configured for local desktop operation (via run_app.bat). "
+            "In cloud or serverless environments, please use Direct File Upload or Load Enterprise Demo mode."
+        )
 
     login_url = "https://services.gst.gov.in/services/login"
     start_time = time.time()
