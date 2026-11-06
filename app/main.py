@@ -49,28 +49,46 @@ app = FastAPI(
 # Resilient Vercel serverless request path normalizer middleware
 @app.middleware("http")
 async def vercel_path_normalizer(request: Request, call_next):
-    if request.headers.get("x-debug-headers"):
-        from fastapi.responses import JSONResponse
-        return JSONResponse({
-            "x-matched-path": request.headers.get("x-matched-path"),
-            "x-invoke-path": request.headers.get("x-invoke-path"),
-            "all_headers": {k: v for k, v in request.headers.items()},
-            "scope_path": request.scope.get("path"),
-            "query_string": request.scope.get("query_string", b"").decode("utf-8", "ignore") if isinstance(request.scope.get("query_string"), bytes) else str(request.scope.get("query_string")),
-        })
-    orig_path = request.headers.get("x-matched-path") or request.headers.get("x-invoke-path")
-    if orig_path and not any(ch in orig_path for ch in ("*", "(", ")", "$")) and not orig_path.endswith("index.py"):
-        if "?" in orig_path:
-            orig_path = orig_path.split("?")[0]
-        request.scope["path"] = orig_path
+    # Check if __path__ was passed via query parameters by Vercel rewrite
+    path_param = request.query_params.get("__path__")
+    if path_param:
+        while path_param.startswith("//"):
+            path_param = path_param[1:]
+        if not path_param.startswith("/"):
+            path_param = "/" + path_param
+            
+        request.scope["path"] = path_param
+        request.scope["raw_path"] = path_param.encode("utf-8")
+        
+        # Strip __path__ from query_string so it doesn't pollute endpoint query params
+        raw_qs = request.scope.get("query_string", b"")
+        qs_str = raw_qs.decode("latin-1") if isinstance(raw_qs, bytes) else str(raw_qs)
+        import urllib.parse
+        parsed_q = urllib.parse.parse_qsl(qs_str, keep_blank_values=True)
+        filtered_q = [(k, v) for k, v in parsed_q if k != "__path__"]
+        new_qs = urllib.parse.urlencode(filtered_q)
+        request.scope["query_string"] = new_qs.encode("latin-1")
     else:
-        raw_path = request.scope.get("path", "")
-        if raw_path in ("/api/index.py", "/api/index", "/api", "/api/"):
-            request.scope["path"] = "/"
-        elif raw_path.startswith("/api/index.py/"):
-            request.scope["path"] = raw_path[len("/api/index.py"):]
-        elif raw_path.startswith("/api/index/"):
-            request.scope["path"] = raw_path[len("/api/index"):]
+        orig_path = request.headers.get("x-matched-path") or request.headers.get("x-invoke-path")
+        if orig_path and not any(ch in orig_path for ch in ("*", "(", ")", "$")) and not orig_path.endswith("index.py"):
+            if "?" in orig_path:
+                orig_path = orig_path.split("?")[0]
+            request.scope["path"] = orig_path
+            request.scope["raw_path"] = orig_path.encode("utf-8")
+        else:
+            raw_path = request.scope.get("path", "")
+            if raw_path in ("/api/index.py", "/api/index", "/api", "/api/"):
+                request.scope["path"] = "/"
+                request.scope["raw_path"] = b"/"
+            elif raw_path.startswith("/api/index.py/"):
+                new_p = raw_path[len("/api/index.py"):]
+                request.scope["path"] = new_p
+                request.scope["raw_path"] = new_p.encode("utf-8")
+            elif raw_path.startswith("/api/index/"):
+                new_p = raw_path[len("/api/index"):]
+                request.scope["path"] = new_p
+                request.scope["raw_path"] = new_p.encode("utf-8")
+                
     response = await call_next(request)
     return response
 

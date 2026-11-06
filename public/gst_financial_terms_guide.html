@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GST Reconciliation & Financial Terms Handbook</title>
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --primary-dark: #0f172a;
+      --primary-light: #3b82f6;
+      --accent: #0284c7;
+      --success: #15803d;
+      --success-bg: #dcfce7;
+      --warning: #b45309;
+      --warning-bg: #fef3c7;
+      --danger: #b91c1c;
+      --danger-bg: #fee2e2;
+      --info: #0369a1;
+      --info-bg: #e0f2fe;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --border: #e2e8f0;
+      --radius: 10px;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+      --shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding-bottom: 60px;
+    }
+
+    header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #1e40af 100%);
+      color: #ffffff;
+      padding: 48px 24px 36px;
+      border-bottom: 4px solid #38bdf8;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    .header-content {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(56, 189, 248, 0.2);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #7dd3fc;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      width: fit-content;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+    }
+
+    .subtitle {
+      font-size: 1.05rem;
+      color: #cbd5e1;
+      max-width: 850px;
+    }
+
+    /* Executive Summary Banner */
+    .executive-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-left: 5px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin: 28px auto 36px;
+      box-shadow: var(--shadow);
+    }
+
+    .executive-card h3 {
+      font-size: 1.15rem;
+      color: var(--primary);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Workflow Diagram */
+    .flow-wrapper {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 36px;
+      box-shadow: var(--shadow);
+    }
+
+    .flow-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      margin-bottom: 6px;
+    }
+
+    .flow-subtitle {
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      margin-bottom: 24px;
+    }
+
+    .flow-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      position: relative;
+    }
+
+    .flow-step {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      position: relative;
+    }
+
+    .flow-step-num {
+      width: 28px;
+      height: 28px;
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.82rem;
+      font-weight: 700;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    .flow-step h4 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      margin-bottom: 6px;
+    }
+
+    .flow-step p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    /* Controls Bar */
+    .controls-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      background: #ffffff;
+      padding: 14px 20px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 260px;
+      position: relative;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 10px 16px 10px 38px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      font-size: 0.92rem;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .search-box input:focus {
+      border-color: var(--primary-light);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+    }
+
+    .filter-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .filter-tab {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      color: var(--text-muted);
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .filter-tab:hover {
+      background: #e2e8f0;
+      color: var(--text-main);
+    }
+
+    .filter-tab.active {
+      background: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary);
+    }
+
+    /* Section Headers */
+    .category-section {
+      margin-bottom: 40px;
+    }
+
+    .category-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .category-header h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+    }
+
+    .category-count {
+      font-size: 0.78rem;
+      background: #e2e8f0;
+      color: var(--text-muted);
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    /* Cards Grid */
+    .terms-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 20px;
+    }
+
+    .term-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .term-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-hover);
+      border-color: #cbd5e1;
+    }
+
+    .term-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+
+    .term-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+    }
+
+    .term-tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .tag-statutory { background: #e0e7ff; color: #3730a3; }
+    .tag-core { background: #dbeafe; color: #1e40af; }
+    .tag-portal { background: #fef3c7; color: #92400e; }
+    .tag-risk { background: #fee2e2; color: #991b1b; }
+    .tag-match { background: #dcfce7; color: #166534; }
+
+    .term-definition {
+      font-size: 0.92rem;
+      color: var(--text-main);
+      margin-bottom: 14px;
+    }
+
+    .term-significance {
+      background: #f8fafc;
+      border-left: 3px solid var(--primary-light);
+      padding: 10px 12px;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.84rem;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .term-significance strong {
+      color: var(--primary-dark);
+    }
+
+    .example-box {
+      background: #f1f5f9;
+      border: 1px dashed #cbd5e1;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #334155;
+    }
+
+    /* Comparison Table */
+    .table-container {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow-x: auto;
+      box-shadow: var(--shadow);
+      margin-top: 16px;
+      margin-bottom: 40px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      text-align: left;
+    }
+
+    th {
+      background: #f1f5f9;
+      color: var(--primary-dark);
+      font-weight: 700;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 14px 18px;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: top;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: #f8fafc;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .status-exact { background: var(--success-bg); color: var(--success); }
+    .status-fuzzy { background: var(--warning-bg); color: var(--warning); }
+    .status-danger { background: var(--danger-bg); color: var(--danger); }
+    .status-info { background: var(--info-bg); color: var(--info); }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      margin-top: 60px;
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+
+    @media print {
+      body { background: #fff; padding: 0; }
+      header { background: #1e3a8a !important; color: #fff !important; -webkit-print-color-adjust: exact; }
+      .controls-bar { display: none; }
+      .term-card { break-inside: avoid; border: 1px solid #ccc; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="container">
+      <div class="header-content">
+        <span class="badge-pill">Indian Indirect Taxation & Reconciliation</span>
+        <h1>Financial & GST Terms Handbook</h1>
+        <p class="subtitle">A complete reference guide explaining the statutory concepts, return forms, accounting records, and matching logic used in the Automated GSTR-2B vs. Books Reconciliation Project.</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- EXECUTIVE SUMMARY -->
+    <div class="executive-card">
+      <h3>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        Why GST Reconciliation Matters to Business Cash Flow
+      </h3>
+      <p style="color: var(--text-muted); font-size: 0.94rem;">
+        Under Indian GST law (specifically CGST Rule 36(4)), a business can only claim <strong>Input Tax Credit (ITC)</strong> for invoices that their suppliers have officially filed in their returns and which appear in the recipient's <strong>GSTR-2B</strong> statement. Discrepancies like incorrect invoice numbers, missing vendor filings, or date mismatches cause either <strong>loss of tax credit</strong> or <strong>costly tax notices with 18% annual interest</strong>. This project automates the matching of external government portal data against internal accounting books.
+      </p>
+    </div>
+
+    <!-- GST FLOW PIPELINE -->
+    <div class="flow-wrapper">
+      <div class="flow-title">The End-to-End GST Input Tax Credit Pipeline</div>
+      <div class="flow-subtitle">How money and invoice data move from vendor sale to internal book reconciliation:</div>
+      
+      <div class="flow-grid">
+        <div class="flow-step">
+          <div class="flow-step-num">1</div>
+          <h4>Vendor Issues Bill</h4>
+          <p>Vendor sells goods/services, issues Tax Invoice with their GSTIN, buyer's GSTIN, and GST charge (e.g., ₹18,000).</p>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-step-num">2</div>
+          <h4>Vendor Files GSTR-1</h4>
+          <p>By the 11th of next month, vendor files outward supplies (GSTR-1) on the government GST Portal (gst.gov.in).</p>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-step-num">3</div>
+          <h4>GSTR-2B Generated</h4>
+          <p>On the 14th of each month, GST portal compiles all filed invoices into a static statement (GSTR-2B) for the buyer.</p>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-step-num">4</div>
+          <h4>Internal Booking</h4>
+          <p>Buyer's accounts team enters the invoice into Tally / ERP Purchase Register to claim purchase expense.</p>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-step-num">5</div>
+          <h4>Automated Reconciliation</h4>
+          <p>Our tool matches 2B vs. Books to identify eligible ITC, typos, value variances, and unfiled vendor bills.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTROLS & FILTER BAR -->
+    <div class="controls-bar">
+      <div class="search-box">
+        <span class="search-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </span>
+        <input type="text" id="searchInput" placeholder="Search any term (e.g. ITC, GSTR-2B, GSTIN, B2B)..." onkeyup="filterTerms()">
+      </div>
+      <div class="filter-tabs">
+        <button class="filter-tab active" onclick="setCategory('all', this)">All Terms (18)</button>
+        <button class="filter-tab" onclick="setCategory('fundamentals', this)">GST Fundamentals</button>
+        <button class="filter-tab" onclick="setCategory('returns', this)">Returns & Portal</button>
+        <button class="filter-tab" onclick="setCategory('accounting', this)">Accounting & Books</button>
+        <button class="filter-tab" onclick="setCategory('matching', this)">Reconciliation Logic</button>
+      </div>
+    </div>
+
+    <!-- SECTION 1: GST FUNDAMENTALS -->
+    <section class="category-section" data-cat="fundamentals">
+      <div class="category-header">
+        <h2>1. GST Fundamentals & Transaction Types</h2>
+        <span class="category-count">4 Terms</span>
+      </div>
+      <div class="terms-grid">
+
+        <div class="term-card" data-tags="gst goods services tax indirect fundamentals">
+          <div>
+            <div class="term-head">
+              <span class="term-title">GST (Goods & Services Tax)</span>
+              <span class="term-tag tag-statutory">Statutory</span>
+            </div>
+            <p class="term-definition">
+              A comprehensive, multi-stage, destination-based indirect tax levied on the manufacture, sale, and consumption of goods and services throughout India, replacing legacy taxes like VAT, Service Tax, and Excise.
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> The entire reconciliation tool ensures compliance with GST laws and prevents wrongful claims or penalties.
+            </div>
+          </div>
+          <div class="example-box">
+            Standard Tax Slabs: 0%, 5%, 12%, 18%, 28%
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="gstin identification number pan 15 digit state code">
+          <div>
+            <div class="term-head">
+              <span class="term-title">GSTIN</span>
+              <span class="term-tag tag-core">Primary Key</span>
+            </div>
+            <p class="term-definition">
+              <strong>Goods and Services Tax Identification Number</strong>: A unique 15-digit alphanumeric identifier assigned to every registered business taxpayer in India.
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> Unlike vendor names (which can be misspelled or duplicated, e.g., "Bhavik Enterprises"), the <strong>GSTIN is legally unique</strong>. It is our primary lookup key for pairing invoices.
+            </div>
+          </div>
+          <div class="example-box">
+            Structure: 07 AAAAA 0000 A 1 Z 5<br>
+            [07 = Delhi State Code] [10 Digits PAN] [Entity] [Z] [Check Digit]
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="b2b business to business itc input credit invoice">
+          <div>
+            <div class="term-head">
+              <span class="term-title">B2B (Business-to-Business)</span>
+              <span class="term-tag tag-core">Transaction</span>
+            </div>
+            <p class="term-definition">
+              Commercial sales where both the selling party and the purchasing party hold active GSTIN numbers. In B2B transactions, the buyer pays GST to the seller and is entitled to claim Input Tax Credit.
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> This tool reconciles <strong>B2B purchases exclusively</strong>, because only B2B invoices confer ITC benefits to the buyer.
+            </div>
+          </div>
+          <div class="example-box">
+            Supplier GSTIN: 07AAACB1234F1Z1 ➔ Buyer GSTIN: 08BBBCD5678K1Z2
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="b2c business to consumer cash retail unregistered">
+          <div>
+            <div class="term-head">
+              <span class="term-title">B2C (Business-to-Consumer / Cash)</span>
+              <span class="term-tag tag-core">Transaction</span>
+            </div>
+            <p class="term-definition">
+              Sales made to an end consumer or an unregistered purchaser without a GSTIN. Often referred to in everyday business as "Cash Sales" or retail billing.
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> No ITC is passed to the buyer in B2C transactions. These do not require GSTR-2B purchase reconciliation.
+            </div>
+          </div>
+          <div class="example-box">
+            Sweet shop or retail store bill issued without customer GSTIN.
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SECTION 2: RETURNS & STATUTORY STATEMENTS -->
+    <section class="category-section" data-cat="returns">
+      <div class="category-header">
+        <h2>2. GST Return Forms & Government Statements</h2>
+        <span class="category-count">4 Terms</span>
+      </div>
+      <div class="terms-grid">
+
+        <div class="term-card" data-tags="gstr-1 outward sales return supplier vendor monthly">
+          <div>
+            <div class="term-head">
+              <span class="term-title">GSTR-1</span>
+              <span class="term-tag tag-portal">Government Form</span>
+            </div>
+            <p class="term-definition">
+              The monthly or quarterly return filed by suppliers to report all their outward supplies (sales) and tax collected from buyers. Due by the 11th of each following month.
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> If a vendor fails to file their GSTR-1, their invoice will never reflect in the buyer's 2B statement, blocking the buyer from claiming ITC.
+            </div>
+          </div>
+          <div class="example-box">
+            Vendor files GSTR-1 for October by 11th November.
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="gstr-2b static itc statement 14th portal rule 36">
+          <div>
+            <div class="term-head">
+              <span class="term-title">GSTR-2B</span>
+              <span class="term-tag tag-portal">Statutory Baseline</span>
+            </div>
+            <p class="term-definition">
+              An <strong>auto-drafted, static Input Tax Credit (ITC) statement</strong> generated on the 14th of every month for the buyer, based on all GSTR-1s filed by suppliers up to the cutoff date.
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> <strong>GSTR-2B is the legal foundation of our tool.</strong> Under Indian tax rules, buyers cannot claim more ITC than what appears in this document.
+            </div>
+          </div>
+          <div class="example-box">
+            October 2B statement is finalized on 14th November and never changes.
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="gstr-2a dynamic auto generated real time statement">
+          <div>
+            <div class="term-head">
+              <span class="term-title">GSTR-2A vs GSTR-2B</span>
+              <span class="term-tag tag-portal">Comparison</span>
+            </div>
+            <p class="term-definition">
+              <strong>GSTR-2A is dynamic</strong> (updates continuously whenever a vendor files late), whereas <strong>GSTR-2B is static</strong> (locks in month-by-month for exact tax calculation).
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> Tax authorities mandate reconciliation against <strong>GSTR-2B</strong> (not 2A) for monthly tax filing in GSTR-3B.
+            </div>
+          </div>
+          <div class="example-box">
+            GSTR-2A: Dynamic view | GSTR-2B: Statutory benchmark for claim
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="gstr-3b monthly summary return payment itc utilization">
+          <div>
+            <div class="term-head">
+              <span class="term-title">GSTR-3B</span>
+              <span class="term-tag tag-portal">Final Filing</span>
+            </div>
+            <p class="term-definition">
+              The self-declared monthly summary return filed by the 20th of every month, where businesses summarize their total sales, eligible ITC, and pay their net GST tax liability to the government.
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> The output figures produced by our reconciliation tool feed directly into Table 4 of GSTR-3B.
+            </div>
+          </div>
+          <div class="example-box">
+            Net Tax Paid = Total Output Tax (Sales) - Eligible ITC (from 2B Reconciled)
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SECTION 3: ACCOUNTING, TAX SPLITS & ITC RULES -->
+    <section class="category-section" data-cat="accounting">
+      <div class="category-header">
+        <h2>3. Accounting Records, Tax Components & ITC Rules</h2>
+        <span class="category-count">5 Terms</span>
+      </div>
+      <div class="terms-grid">
+
+        <div class="term-card" data-tags="purchase register books tally erp accounting entries internal">
+          <div>
+            <div class="term-head">
+              <span class="term-title">Purchase Register (Books)</span>
+              <span class="term-tag tag-core">Internal Source</span>
+            </div>
+            <p class="term-definition">
+              The internal ledger maintained by the company's accounting team in software like <strong>Tally Prime, Busy, SAP, or Zoho Books</strong>, listing all physical bills received from vendors.
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> Represents <strong>"File 2"</strong> in our reconciliation engine. It tells us what purchases the business claims to have made.
+            </div>
+          </div>
+          <div class="example-box">
+            Exported from Tally Prime as Excel / CSV with bill numbers & dates.
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="itc input tax credit offset refund eligibility asset">
+          <div>
+            <div class="term-head">
+              <span class="term-title">ITC (Input Tax Credit)</span>
+              <span class="term-tag tag-statutory">Financial Asset</span>
+            </div>
+            <p class="term-definition">
+              The tax credit a business receives for GST paid on purchasing goods or services used in the course of business, which can be deducted from the GST payable on outward sales.
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> ITC is actual money. Every ₹1 of matched ITC reduces ₹1 of cash tax outflow for the company.
+            </div>
+          </div>
+          <div class="example-box">
+            Sales Tax Payable: ₹50,000 | Reconciled ITC: ₹35,000 | Net Cash Paid: ₹15,000
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="taxable value base amount invoice value total rate">
+          <div>
+            <div class="term-head">
+              <span class="term-title">Taxable Value vs Total Invoice Value</span>
+              <span class="term-tag tag-core">Calculation</span>
+            </div>
+            <p class="term-definition">
+              <strong>Taxable Value</strong> is the base price of goods/services before GST is applied. <strong>Total Invoice Value</strong> is the final bill amount including GST.
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> GST rates (e.g. 18%) apply strictly to the <strong>Taxable Value</strong>. Matching taxable value prevents mismatches caused by freight, discounts, or rounding.
+            </div>
+          </div>
+          <div class="example-box">
+            Base Taxable: ₹1,00,000 + GST (18%): ₹18,000 = Total Invoice Value: ₹1,18,000
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="cgst sgst igst central state integrated interstate intrastate">
+          <div>
+            <div class="term-head">
+              <span class="term-title">CGST, SGST & IGST</span>
+              <span class="term-tag tag-statutory">Tax Breakdown</span>
+            </div>
+            <p class="term-definition">
+              * <strong>CGST + SGST</strong>: Levied equally on Intra-state sales (within same state, e.g., Delhi to Delhi: 9% Central + 9% State = 18%).<br>
+              * <strong>IGST</strong>: Levied as a single tax on Inter-state sales (e.g., Haryana to Delhi: 18% Integrated Tax).
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> In accounting, IGST cannot always be mixed with CGST/SGST without set-off priority rules. The tool verifies component-level accuracy.
+            </div>
+          </div>
+          <div class="example-box">
+            Intra-State: CGST ₹9,000 + SGST ₹9,000 | Inter-State: IGST ₹18,000
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="rule 36 4 cgst statutory limit compliance notice">
+          <div>
+            <div class="term-head">
+              <span class="term-title">Rule 36(4) of CGST Rules</span>
+              <span class="term-tag tag-statutory">Strict Law</span>
+            </div>
+            <p class="term-definition">
+              A statutory amendment in Indian GST rules that mandates zero tolerance: <strong>No taxpayer can claim ITC unless the supplier's invoice is visible in GSTR-2B</strong>.
+            </p>
+            <div class="term-significance">
+              <strong>Role in Project:</strong> This legal rule makes software-driven GSTR-2B reconciliation a non-negotiable monthly necessity for every Indian company.
+            </div>
+          </div>
+          <div class="example-box">
+            Unmatched bill claimed in 3B = Automated ASMT-10 scrutiny notice.
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SECTION 4: RECONCILIATION LOGIC & DISCREPANCIES -->
+    <section class="category-section" data-cat="matching">
+      <div class="category-header">
+        <h2>4. Reconciliation Engine & Discrepancy Categorization</h2>
+        <span class="category-count">5 Terms</span>
+      </div>
+      <div class="terms-grid">
+
+        <div class="term-card" data-tags="exact match green reconciled 100 percent perfect">
+          <div>
+            <div class="term-head">
+              <span class="term-title">Exact Match</span>
+              <span class="term-tag tag-match">Green (Ready)</span>
+            </div>
+            <p class="term-definition">
+              A scenario where the supplier's <strong>GSTIN</strong>, <strong>Invoice Number</strong>, <strong>Taxable Value</strong>, and <strong>GST Tax Amount</strong> match 100% between GSTR-2B and Books.
+            </p>
+            <div class="term-significance">
+              <strong>Action:</strong> Approved automatically for full ITC claim in the current tax period.
+            </div>
+          </div>
+          <div class="example-box">
+            Portal: GSTIN-A | Bill #104 | Taxable ₹50,000 | Tax ₹9,000<br>
+            Books:  GSTIN-A | Bill #104 | Taxable ₹50,000 | Tax ₹9,000 ➔ 100% Match
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="fuzzy normalization leading zeros slashes formatting yellow">
+          <div>
+            <div class="term-head">
+              <span class="term-title">Normalized / Fuzzy Match</span>
+              <span class="term-tag tag-match" style="background:#fef3c7; color:#92400e;">Yellow (Format)</span>
+            </div>
+            <p class="term-definition">
+              A match where GSTIN and amounts match identically, but the invoice number has formatting noise such as leading zeroes (<code>0049</code> vs <code>49</code>), slashes (<code>/</code>), hyphens (<code>-</code>), or prefixes (<code>INV</code>).
+            </p>
+            <div class="term-significance">
+              <strong>Action:</strong> Auto-cleaned by stripping special characters and non-significant zeros, saving hours of manual Excel editing.
+            </div>
+          </div>
+          <div class="example-box">
+            Portal: "00049" ➔ Cleaned: "49"<br>
+            Books:  "INV/2023-24/49" ➔ Cleaned: "49" ➔ Auto-Matched!
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="typo probable match transposition 49 94 manual verification">
+          <div>
+            <div class="term-head">
+              <span class="term-title">Probable Match (Invoice Typo)</span>
+              <span class="term-tag tag-match" style="background:#fef3c7; color:#92400e;">Yellow (Typo)</span>
+            </div>
+            <p class="term-definition">
+              A scenario where the <strong>GSTIN and Taxable/Tax amounts match to the penny</strong>, but the invoice number has human typing errors (e.g. inverted digits like <code>49</code> vs <code>94</code>).
+            </p>
+            <div class="term-significance">
+              <strong>Action:</strong> Flagged in the UI for a 1-click human confirmation: <em>"Amounts match perfectly; confirm if this is a typo in Bill Number."</em>
+            </div>
+          </div>
+          <div class="example-box">
+            Vendor: 07AAA... | Bill "94" | Tax ₹18,450<br>
+            Books:  07AAA... | Bill "49" | Tax ₹18,450 ➔ Flagged as Probable Typo
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="itc at risk red missing in 2b books only vendor default">
+          <div>
+            <div class="term-head">
+              <span class="term-title">ITC at Risk (Missing in GSTR-2B)</span>
+              <span class="term-tag tag-risk">Red Alert</span>
+            </div>
+            <p class="term-definition">
+              Invoices recorded in the company's Books, but completely absent from the government's GSTR-2B portal because the vendor did not file their return or entered the wrong GSTIN.
+            </p>
+            <div class="term-significance">
+              <strong>Action:</strong> <strong>ITC cannot be claimed.</strong> The tool compiles an automated vendor follow-up list to demand immediate GSTR-1 filing before making vendor payment.
+            </div>
+          </div>
+          <div class="example-box">
+            ₹2,40,000 paid to cement vendor, but vendor did not file GSTR-1.
+          </div>
+        </div>
+
+        <div class="term-card" data-tags="unbooked itc 2b only blue missing in books omitted purchase">
+          <div>
+            <div class="term-head">
+              <span class="term-title">Unbooked ITC (Missing in Books)</span>
+              <span class="term-tag tag-core" style="background:#e0f2fe; color:#0369a1;">Blue Notice</span>
+            </div>
+            <p class="term-definition">
+              Invoices appearing in GSTR-2B on the government portal that the internal accounts department forgot to record in Tally/ERP.
+            </p>
+            <div class="term-significance">
+              <strong>Action:</strong> Notifies the internal accounts department to enter the bill into Tally before the financial year-end deadline to avoid losing legitimate credit.
+            </div>
+          </div>
+          <div class="example-box">
+            Utility / Courier bill of ₹1,500 present on portal but missing in Tally.
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- COMPARISON SUMMARY TABLE -->
+    <div class="table-container">
+      <div style="padding: 18px 20px; background: #ffffff; border-bottom: 1px solid var(--border);">
+        <h3 style="font-size: 1.15rem; color: var(--primary-dark); margin-bottom: 4px;">Summary Comparison: Reconciliation Match Classifications</h3>
+        <p style="color: var(--text-muted); font-size: 0.88rem;">How our automated engine categorizes each invoice line item for accounting decision-making:</p>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Classification</th>
+            <th>Color Indicator</th>
+            <th>Matching Condition</th>
+            <th>Business Impact</th>
+            <th>Required Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Exact Match</strong></td>
+            <td><span class="status-badge status-exact">● Exact Match (Green)</span></td>
+            <td>GSTIN + Invoice No. + Taxable + Tax match 100%</td>
+            <td>Zero tax risk; cash benefit realized</td>
+            <td>Claim full ITC in GSTR-3B</td>
+          </tr>
+          <tr>
+            <td><strong>Normalized Match</strong></td>
+            <td><span class="status-badge status-fuzzy">● Format Resolved (Yellow)</span></td>
+            <td>Cleaned invoice numbers match (strips 0s, slashes, spaces)</td>
+            <td>Legitimate claim; formatting difference</td>
+            <td>Auto-accept with audit trail</td>
+          </tr>
+          <tr>
+            <td><strong>Probable Typo Match</strong></td>
+            <td><span class="status-badge status-fuzzy">● Probable Typo (Yellow)</span></td>
+            <td>GSTIN & Amount match; Invoice No has digit inversion</td>
+            <td>High probability of human data entry typo</td>
+            <td>Manual 1-click verification</td>
+          </tr>
+          <tr>
+            <td><strong>Value Mismatch</strong></td>
+            <td><span class="status-badge status-fuzzy" style="background:#fed7aa; color:#9a3412;">● Value Variance (Orange)</span></td>
+            <td>GSTIN & Invoice match; Taxable/Tax differs by > ₹5</td>
+            <td>Disputed amount; possible debit/credit note</td>
+            <td>Reconcile difference with vendor bill</td>
+          </tr>
+          <tr>
+            <td><strong>Missing in 2B (Books Only)</strong></td>
+            <td><span class="status-badge status-danger">● Ineligible ITC (Red)</span></td>
+            <td>Bill in Tally Books, but vendor did not file GSTR-1</td>
+            <td>Direct cash loss if claimed illegally</td>
+            <td>Hold vendor payment; send reminder email</td>
+          </tr>
+          <tr>
+            <td><strong>Missing in Books (2B Only)</strong></td>
+            <td><span class="status-badge status-info">● Unbooked Bill (Blue)</span></td>
+            <td>Bill on Portal, but absent from company's Tally/ERP</td>
+            <td>Unclaimed asset; unrecorded purchase expense</td>
+            <td>Accounts team enters missing bill in ERP</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>GST Reconciliation Project • Financial & Technical Terms Guide • Designed for Indian Enterprise Compliance</p>
+    </div>
+  </footer>
+
+  <script>
+    function setCategory(category, button) {
+      document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+      button.classList.add('active');
+
+      const sections = document.querySelectorAll('.category-section');
+      sections.forEach(sec => {
+        if (category === 'all' || sec.getAttribute('data-cat') === category) {
+          sec.style.display = 'block';
+        } else {
+          sec.style.display = 'none';
+        }
+      });
+    }
+
+    function filterTerms() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      const cards = document.querySelectorAll('.term-card');
+      
+      cards.forEach(card => {
+        const text = card.innerText.toLowerCase();
+        const tags = (card.getAttribute('data-tags') || '').toLowerCase();
+        if (text.includes(query) || tags.includes(query)) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      // Hide section headers if all cards inside are hidden
+      document.querySelectorAll('.category-section').forEach(sec => {
+        const visibleCards = sec.querySelectorAll('.term-card:not([style*="display: none"])');
+        sec.style.display = visibleCards.length > 0 ? 'block' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>
+
