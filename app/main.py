@@ -9,7 +9,7 @@ import sys
 import json
 import asyncio
 from typing import Optional, List
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,8 +34,22 @@ from app.engine.tally_connector import (
 app = FastAPI(
     title="TallyWalls-GST Intelligence & Reconciliation Hub",
     description="Enterprise-grade automated GSTR-2B vs. Books Reconciliation System",
-    version="2.4.0"
+    version="2.4.0",
+    redirect_slashes=False
 )
+
+# Resilient Vercel serverless request path normalizer middleware
+@app.middleware("http")
+async def vercel_path_normalizer(request: Request, call_next):
+    raw_path = request.scope.get("path", "")
+    if raw_path in ("/api/index.py", "/api/index", "/api", "/api/"):
+        request.scope["path"] = "/"
+    elif raw_path.startswith("/api/index.py/"):
+        request.scope["path"] = raw_path[len("/api/index.py"):]
+    elif raw_path.startswith("/api/index/"):
+        request.scope["path"] = raw_path[len("/api/index"):]
+    response = await call_next(request)
+    return response
 
 # Enable CORS for local cross-origin development
 app.add_middleware(
@@ -257,6 +271,12 @@ async def favicon():
 
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/index.html", response_class=HTMLResponse)
+@app.get("/api", response_class=HTMLResponse)
+@app.get("/api/", response_class=HTMLResponse)
+@app.get("/api/index", response_class=HTMLResponse)
+@app.get("/api/index/", response_class=HTMLResponse)
+@app.get("/api/index.py", response_class=HTMLResponse)
 async def serve_index():
     """Serve the single-page application dashboard with strict anti-caching headers."""
     index_file = os.path.join(STATIC_DIR, "index.html")
