@@ -6,6 +6,14 @@ official GST portal automation bridge, and multi-sheet audit exports.
 
 import os
 import sys
+
+# Ensure repository root and app directory are always in sys.path
+_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+_PARENT_DIR = os.path.dirname(_CURRENT_DIR)
+for _d in [_PARENT_DIR, _CURRENT_DIR]:
+    if _d not in sys.path:
+        sys.path.insert(0, _d)
+
 import json
 import asyncio
 from typing import Optional, List
@@ -41,13 +49,19 @@ app = FastAPI(
 # Resilient Vercel serverless request path normalizer middleware
 @app.middleware("http")
 async def vercel_path_normalizer(request: Request, call_next):
-    raw_path = request.scope.get("path", "")
-    if raw_path in ("/api/index.py", "/api/index", "/api", "/api/"):
-        request.scope["path"] = "/"
-    elif raw_path.startswith("/api/index.py/"):
-        request.scope["path"] = raw_path[len("/api/index.py"):]
-    elif raw_path.startswith("/api/index/"):
-        request.scope["path"] = raw_path[len("/api/index"):]
+    orig_path = request.headers.get("x-matched-path") or request.headers.get("x-invoke-path")
+    if orig_path:
+        if "?" in orig_path:
+            orig_path = orig_path.split("?")[0]
+        request.scope["path"] = orig_path
+    else:
+        raw_path = request.scope.get("path", "")
+        if raw_path in ("/api/index.py", "/api/index", "/api", "/api/"):
+            request.scope["path"] = "/"
+        elif raw_path.startswith("/api/index.py/"):
+            request.scope["path"] = raw_path[len("/api/index.py"):]
+        elif raw_path.startswith("/api/index/"):
+            request.scope["path"] = raw_path[len("/api/index"):]
     response = await call_next(request)
     return response
 
