@@ -1,0 +1,2025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="/static/img/favicon.png">
+  <link rel="apple-touch-icon" href="/static/img/icon-192.png">
+  <title>TallyWalls-GST Intelligence & Reconciliation Hub | GSTR-2B vs. Books</title>
+  <link rel="stylesheet" href="/static/css/style.css?v=2.1">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+    /* SVG Safety: Never blow up across the screen */
+    svg {
+      display: inline-block;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
+    :root {
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+      --bg-app: #f8fafc;
+      --surface-card: #ffffff;
+      --surface-subtle: #f1f5f9;
+      --surface-muted: #e2e8f0;
+
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-tertiary: #94a3b8;
+      --text-inverse: #ffffff;
+
+      --border-light: #e2e8f0;
+      --border-subtle: #edf2f7;
+      --border-focus: #3b82f6;
+
+      --brand-navy: #090e1a;
+      --brand-navy-light: #111827;
+      --brand-indigo: #4f46e5;
+      --brand-indigo-hover: #4338ca;
+      --brand-blue: #2563eb;
+      --brand-blue-hover: #1d4ed8;
+
+      --status-exact-bg: #ecfdf5;
+      --status-exact-border: #a7f3d0;
+      --status-exact-text: #065f46;
+      --status-exact-dot: #10b981;
+
+      --status-norm-bg: #fffbeb;
+      --status-norm-border: #fde68a;
+      --status-norm-text: #92400e;
+      --status-norm-dot: #f59e0b;
+
+      --status-typo-bg: #fefce8;
+      --status-typo-border: #fef08a;
+      --status-typo-text: #854d0e;
+      --status-typo-dot: #eab308;
+
+      --status-mismatch-bg: #fff7ed;
+      --status-mismatch-border: #fed7aa;
+      --status-mismatch-text: #9a3412;
+      --status-mismatch-dot: #f97316;
+
+      --status-risk-bg: #fef2f2;
+      --status-risk-border: #fecaca;
+      --status-risk-text: #991b1b;
+      --status-risk-dot: #ef4444;
+
+      --status-unbooked-bg: #f0f9ff;
+      --status-unbooked-border: #bae6fd;
+      --status-unbooked-text: #075985;
+      --status-unbooked-dot: #0ea5e9;
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-full: 9999px;
+
+      --shadow-subtle: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.03);
+      --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+      --shadow-elevated: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-app);
+      color: var(--text-primary);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .navbar {
+      background-color: var(--brand-navy);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(12px);
+    }
+
+    .nav-container {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    
+    .brand-logo-img {
+      height: 32px;
+      width: auto;
+      max-width: 165px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .brand-divider {
+      width: 1px;
+      height: 24px;
+      background: rgba(255, 255, 255, 0.18);
+      margin: 0 4px;
+    }
+
+    .brand-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-symbol {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      max-width: 36px;
+      background: linear-gradient(135deg, #4f46e5 0%, #2563eb 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      box-shadow: 0 0 16px rgba(79, 70, 229, 0.4);
+      overflow: hidden;
+    }
+
+    .brand-symbol svg {
+      width: 20px;
+      height: 20px;
+      max-width: 20px;
+      max-height: 20px;
+    }
+
+    .brand-text h1 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tag-version {
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.1);
+      color: #94a3b8;
+      letter-spacing: 0.02em;
+    }
+
+    .brand-text p {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      font-weight: 400;
+    }
+
+    .nav-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: var(--radius-full);
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #34d399;
+      letter-spacing: 0.02em;
+    }
+
+    .status-indicator-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    .btn-ui {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: var(--font-sans);
+      font-size: 0.84rem;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease-in-out;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .btn-ui svg {
+      width: 16px;
+      height: 16px;
+      max-width: 16px;
+      max-height: 16px;
+    }
+
+    .btn-ghost {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.12);
+      color: #f1f5f9;
+    }
+
+    .btn-ghost:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+      color: #ffffff;
+    }
+
+    .btn-accent {
+      background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%);
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-accent:hover {
+      background: linear-gradient(180deg, #4338ca 0%, #3730a3 100%);
+    }
+
+    .btn-primary {
+      background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: var(--shadow-subtle);
+    }
+
+    .btn-primary:hover {
+      background: #090e1a;
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-export {
+      background: #059669;
+      color: #ffffff;
+      border: 1px solid #047857;
+      box-shadow: var(--shadow-subtle);
+    }
+
+    .btn-export:hover {
+      background: #047857;
+    }
+
+    .shell-container {
+      max-width: 1480px;
+      margin: 28px auto;
+      padding: 0 28px;
+    }
+
+    .section-meta {
+      margin-bottom: 20px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+
+    .section-meta h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text-primary);
+    }
+
+    .section-meta p {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+    }
+
+    .ingestion-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-card);
+      margin-bottom: 28px;
+    }
+
+    .dual-drop-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .dual-drop-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .drop-card {
+      border: 1.5px dashed var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 24px 20px;
+      background: #fdfdfe;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .drop-card:hover {
+      border-color: var(--brand-indigo);
+      background: #faf5ff;
+    }
+
+    .drop-card.dragover {
+      border-color: var(--brand-indigo);
+      background: #eef2ff;
+      border-style: solid;
+      transform: scale(0.995);
+    }
+
+    .drop-card.has-file {
+      border-color: #10b981;
+      background: #f0fdf4;
+      border-style: solid;
+    }
+
+    .drop-icon-box {
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      max-width: 44px;
+      border-radius: 10px;
+      background: var(--surface-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .drop-icon-box svg {
+      width: 22px;
+      height: 22px;
+      max-width: 22px;
+      max-height: 22px;
+    }
+
+    .drop-card:hover .drop-icon-box {
+      background: #ede9fe;
+      color: var(--brand-indigo);
+    }
+
+    .drop-card.has-file .drop-icon-box {
+      background: #d1fae5;
+      color: #059669;
+    }
+
+    .drop-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .drop-format-hint {
+      font-size: 0.76rem;
+      color: var(--text-tertiary);
+      margin-bottom: 14px;
+    }
+
+    .btn-subtle-upload {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--brand-indigo);
+      background: #f5f3ff;
+      border: 1px solid #ddd6fe;
+      padding: 5px 12px;
+      border-radius: var(--radius-sm);
+      pointer-events: none;
+    }
+
+    .file-status-chip {
+      margin-top: 10px;
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 90%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .action-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 18px;
+      border-top: 1px solid var(--border-light);
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    .tolerance-panel {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .tolerance-panel label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .tolerance-input-box {
+      display: flex;
+      align-items: center;
+      background: var(--surface-subtle);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      padding: 2px 8px;
+    }
+
+    .tolerance-prefix {
+      font-size: 0.8rem;
+      color: var(--text-tertiary);
+      margin-right: 4px;
+    }
+
+    .tolerance-input-box input {
+      width: 50px;
+      background: transparent;
+      border: none;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      outline: none;
+    }
+
+    .tolerance-desc {
+      font-size: 0.74rem;
+      color: var(--text-tertiary);
+    }
+
+    .reconcile-loader {
+      display: none;
+      background: var(--surface-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 48px;
+      text-align: center;
+      margin-bottom: 28px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .loader-pulse {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
+      position: relative;
+    }
+
+    .loader-pulse::before,
+    .loader-pulse::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      border-top-color: var(--brand-indigo);
+      animation: spin 1s cubic-bezier(0.55, 0.25, 0.25, 0.95) infinite;
+    }
+
+    .loader-pulse::after {
+      border-top-color: var(--brand-blue);
+      animation-duration: 1.4s;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loader-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .loader-sub {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+    }
+
+    .kpi-cluster {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .metric-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      box-shadow: var(--shadow-subtle);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .metric-card:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-card);
+    }
+
+    .metric-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .metric-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    .metric-icon-small {
+      width: 24px;
+      height: 24px;
+      min-width: 24px;
+      max-width: 24px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .metric-icon-small svg {
+      width: 14px;
+      height: 14px;
+      max-width: 14px;
+      max-height: 14px;
+    }
+
+    .metric-amount {
+      font-size: 1.45rem;
+      font-weight: 800;
+      font-family: var(--font-sans);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.03em;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+
+    .metric-footer {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-theme-books .metric-icon-small { background: #f1f5f9; color: #475569; }
+    .card-theme-portal .metric-icon-small { background: #e0f2fe; color: #0284c7; }
+    .card-theme-matched {
+      border-color: var(--status-exact-border);
+      background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);
+    }
+    .card-theme-matched .metric-icon-small { background: #d1fae5; color: #059669; }
+
+    .card-theme-risk {
+      border-color: var(--status-risk-border);
+      background: linear-gradient(180deg, #ffffff 0%, #fef2f2 100%);
+    }
+    .card-theme-risk .metric-icon-small { background: #fee2e2; color: #dc2626; }
+    .card-theme-risk .metric-amount { color: #b91c1c; }
+
+    .card-theme-unbooked {
+      border-color: var(--status-unbooked-border);
+      background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
+    }
+    .card-theme-unbooked .metric-icon-small { background: #e0f2fe; color: #0284c7; }
+
+    .recon-vault-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+      margin-bottom: 40px;
+    }
+
+    .vault-header-bar {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .search-field {
+      position: relative;
+      min-width: 300px;
+      flex: 1;
+      max-width: 440px;
+    }
+
+    .search-field input {
+      width: 100%;
+      padding: 8px 12px 8px 36px;
+      font-family: var(--font-sans);
+      font-size: 0.84rem;
+      background: var(--surface-subtle);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      outline: none;
+      transition: all 0.15s ease;
+      color: var(--text-primary);
+    }
+
+    .search-field input:focus {
+      background: #ffffff;
+      border-color: var(--brand-indigo);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .search-icon-pos {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-tertiary);
+      display: flex;
+    }
+
+    .search-icon-pos svg {
+      width: 16px;
+      height: 16px;
+      max-width: 16px;
+      max-height: 16px;
+    }
+
+    .segmented-tabs-wrapper {
+      padding: 12px 20px;
+      background: #fafafa;
+      border-bottom: 1px solid var(--border-light);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .segmented-tabs-wrapper::-webkit-scrollbar {
+      display: none;
+    }
+
+    .segmented-tabs {
+      display: inline-flex;
+      gap: 6px;
+      background: var(--surface-subtle);
+      padding: 3px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-light);
+    }
+
+    .tab-pill {
+      font-family: var(--font-sans);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-secondary);
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .tab-pill:hover {
+      color: var(--text-primary);
+    }
+
+    .tab-pill.active {
+      background: #ffffff;
+      color: var(--text-primary);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .tab-count {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: var(--radius-full);
+      background: var(--surface-muted);
+      color: var(--text-secondary);
+    }
+
+    .tab-pill.active .tab-count {
+      background: #f1f5f9;
+      color: var(--brand-navy);
+    }
+
+    .table-viewport {
+      overflow-x: auto;
+      max-height: 700px;
+    }
+
+    .ledger-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 0.82rem;
+      text-align: left;
+    }
+
+    .th-group-books {
+      background: #f1f5f9;
+      color: #1e293b;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      padding: 6px 12px;
+      border-right: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .th-group-portal {
+      background: #f0f9ff;
+      color: #0369a1;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      padding: 6px 12px;
+      border-right: 1px solid var(--border-light);
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .ledger-table th {
+      background: #f8fafc;
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-light);
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .ledger-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      vertical-align: middle;
+      background-color: transparent;
+    }
+
+    /* Full-Row Data Highlighting for GST Audit Visualization */
+    .ledger-table tbody tr.recon-row {
+      transition: background-color 0.15s ease;
+    }
+
+    /* 1. Exact Match: Clean Emerald Mint across whole row */
+    .ledger-table tbody tr.recon-row-exact,
+    .ledger-table tbody tr.recon-row-exact td {
+      background-color: #ecfdf5 !important;
+      border-bottom: 1px solid #a7f3d0 !important;
+    }
+    .ledger-table tbody tr.recon-row-exact td:first-child {
+      border-left: 4px solid #10b981 !important;
+    }
+    .ledger-table tbody tr.recon-row-exact:hover,
+    .ledger-table tbody tr.recon-row-exact:hover td {
+      background-color: #d1fae5 !important;
+    }
+
+    /* 2. Normalized Match: Soft Blue across whole row */
+    .ledger-table tbody tr.recon-row-norm,
+    .ledger-table tbody tr.recon-row-norm td {
+      background-color: #eff6ff !important;
+      border-bottom: 1px solid #bfdbfe !important;
+    }
+    .ledger-table tbody tr.recon-row-norm td:first-child {
+      border-left: 4px solid #3b82f6 !important;
+    }
+    .ledger-table tbody tr.recon-row-norm:hover,
+    .ledger-table tbody tr.recon-row-norm:hover td {
+      background-color: #dbeafe !important;
+    }
+
+    /* 3. Typo Match: Clear Warm Amber / Golden Yellow across whole row */
+    .ledger-table tbody tr.recon-row-typo,
+    .ledger-table tbody tr.recon-row-typo td {
+      background-color: #fef9c3 !important;
+      border-bottom: 1px solid #fde047 !important;
+    }
+    .ledger-table tbody tr.recon-row-typo td:first-child {
+      border-left: 4px solid #eab308 !important;
+    }
+    .ledger-table tbody tr.recon-row-typo:hover,
+    .ledger-table tbody tr.recon-row-typo:hover td {
+      background-color: #fef08a !important;
+    }
+
+    /* 4. Value Mismatch: Warm Peach / Soft Orange across whole row */
+    .ledger-table tbody tr.recon-row-mismatch,
+    .ledger-table tbody tr.recon-row-mismatch td {
+      background-color: #ffedd5 !important;
+      border-bottom: 1px solid #fed7aa !important;
+    }
+    .ledger-table tbody tr.recon-row-mismatch td:first-child {
+      border-left: 4px solid #f97316 !important;
+    }
+    .ledger-table tbody tr.recon-row-mismatch:hover,
+    .ledger-table tbody tr.recon-row-mismatch:hover td {
+      background-color: #fed7aa !important;
+    }
+
+    /* 5. Missing in 2B (ITC At Risk): Soft Red across whole row */
+    .ledger-table tbody tr.recon-row-risk,
+    .ledger-table tbody tr.recon-row-risk td {
+      background-color: #fee2e2 !important;
+      border-bottom: 1px solid #fca5a5 !important;
+    }
+    .ledger-table tbody tr.recon-row-risk td:first-child {
+      border-left: 4px solid #ef4444 !important;
+    }
+    .ledger-table tbody tr.recon-row-risk:hover,
+    .ledger-table tbody tr.recon-row-risk:hover td {
+      background-color: #fecaca !important;
+    }
+
+    /* 6. Missing in Books (Unclaimed Bills): Soft Sky Cyan across whole row */
+    .ledger-table tbody tr.recon-row-unbooked,
+    .ledger-table tbody tr.recon-row-unbooked td {
+      background-color: #e0f2fe !important;
+      border-bottom: 1px solid #7dd3fc !important;
+    }
+    .ledger-table tbody tr.recon-row-unbooked td:first-child {
+      border-left: 4px solid #0284c7 !important;
+    }
+    .ledger-table tbody tr.recon-row-unbooked:hover,
+    .ledger-table tbody tr.recon-row-unbooked:hover td {
+      background-color: #bae6fd !important;
+    }
+
+    /* Typo Highlight Badge */
+    .diff-highlight {
+      background-color: #fef08a;
+      color: #854d0e;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px dashed #ca8a04;
+      display: inline-block;
+    }
+
+    /* Status Pills */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      white-space: nowrap;
+      letter-spacing: 0.01em;
+    }
+    .status-pill .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+    .status-pill-exact { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+    .status-pill-exact .dot { background: #15803d; }
+
+    .status-pill-norm { background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; }
+    .status-pill-norm .dot { background: #b45309; }
+
+    .status-pill-typo { background: #fef9c3; color: #a16207; border: 1px solid #fde047; }
+    .status-pill-typo .dot { background: #a16207; }
+
+    .status-pill-mismatch { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; }
+    .status-pill-mismatch .dot { background: #c2410c; }
+
+    .status-pill-risk { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+    .status-pill-risk .dot { background: #b91c1c; }
+
+    .status-pill-unbooked { background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
+    .status-pill-unbooked .dot { background: #0369a1; }
+
+    /* Row hover colors handled per status class */
+
+    .num-cell {
+      text-align: right;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 0.8rem;
+    }
+
+    .text-cell-dim {
+      color: var(--text-tertiary);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    .status-badge .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+    }
+
+    .badge-exact {
+      background: var(--status-exact-bg);
+      border-color: var(--status-exact-border);
+      color: var(--status-exact-text);
+    }
+    .badge-exact .dot { background: var(--status-exact-dot); }
+
+    .badge-normalized {
+      background: var(--status-norm-bg);
+      border-color: var(--status-norm-border);
+      color: var(--status-norm-text);
+    }
+    .badge-normalized .dot { background: var(--status-norm-dot); }
+
+    .badge-typo {
+      background: var(--status-typo-bg);
+      border-color: var(--status-typo-border);
+      color: var(--status-typo-text);
+    }
+    .badge-typo .dot { background: var(--status-typo-dot); }
+
+    .badge-mismatch {
+      background: var(--status-mismatch-bg);
+      border-color: var(--status-mismatch-border);
+      color: var(--status-mismatch-text);
+    }
+    .badge-mismatch .dot { background: var(--status-mismatch-dot); }
+
+    .badge-risk {
+      background: var(--status-risk-bg);
+      border-color: var(--status-risk-border);
+      color: var(--status-risk-text);
+    }
+    .badge-risk .dot { background: var(--status-risk-dot); }
+
+    .badge-unbooked {
+      background: var(--status-unbooked-bg);
+      border-color: var(--status-unbooked-border);
+      color: var(--status-unbooked-text);
+    }
+    .badge-unbooked .dot { background: var(--status-unbooked-dot); }
+
+    .vendor-title {
+      font-weight: 600;
+      color: var(--text-primary);
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .vendor-gstin {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-tertiary);
+      letter-spacing: 0.02em;
+    }
+
+    .invoice-pill {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #f1f5f9;
+      color: #334155;
+      display: inline-block;
+    }
+
+    .invoice-portal-pill {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #e0f2fe;
+      color: #0369a1;
+      display: inline-block;
+    }
+
+    .remarks-audit-box {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      max-width: 280px;
+    }
+
+    .app-footer {
+      text-align: center;
+      padding: 28px 0;
+      border-top: 1px solid var(--border-light);
+      font-size: 0.78rem;
+      color: var(--text-tertiary);
+    }
+
+    /* PORTAL BRIDGE, TALLY & DOWNLOADS SCANNER STYLING */
+    .btn-portal-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-sans);
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--brand-indigo);
+      background: #f5f3ff;
+      border: 1px solid #ddd6fe;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-portal-trigger:hover {
+      background: #ede9fe;
+      border-color: #c4b5fd;
+    }
+
+    .btn-portal-trigger svg {
+      width: 14px;
+      height: 14px;
+      color: var(--brand-indigo);
+    }
+
+    .btn-scan-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-sans);
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: #0369a1;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-scan-trigger:hover {
+      background: #e0f2fe;
+      border-color: #7dd3fc;
+    }
+
+    .btn-scan-trigger svg {
+      width: 14px;
+      height: 14px;
+      color: #0284c7;
+    }
+
+    .btn-tally-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-sans);
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: #065f46;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-tally-trigger:hover {
+      background: #d1fae5;
+      border-color: #6ee7b7;
+    }
+
+    .btn-tally-trigger svg {
+      width: 14px;
+      height: 14px;
+      color: #059669;
+    }
+
+    .downloads-item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #ffffff;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      margin-bottom: 8px;
+      transition: all 0.15s ease;
+    }
+
+    .downloads-item-row:hover {
+      border-color: var(--brand-blue);
+      background: #f8fafc;
+    }
+
+    .tally-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    .tally-status-badge.active {
+      background: #ecfdf5;
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+    }
+
+    .tally-status-badge.inactive {
+      background: #fef2f2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-window {
+      background: #ffffff;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 580px;
+      box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.15), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+      overflow: hidden;
+      animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-header {
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #fafafa;
+    }
+
+    .modal-header-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: #ede9fe;
+      color: var(--brand-indigo);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .modal-header h3 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .modal-sub {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+    }
+
+    .modal-sub code {
+      font-family: var(--font-mono);
+      background: #e2e8f0;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    .btn-modal-close {
+      margin-left: auto;
+      background: transparent;
+      border: none;
+      font-size: 1.4rem;
+      color: var(--text-tertiary);
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .btn-modal-close:hover {
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      padding: 22px;
+    }
+
+    .portal-info-banner {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: 0.8rem;
+      color: #166534;
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+      line-height: 1.45;
+    }
+
+    .portal-info-banner svg {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .form-row-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .form-input, .form-select {
+      width: 100%;
+      padding: 8px 12px;
+      font-family: var(--font-sans);
+      font-size: 0.84rem;
+      background: var(--surface-subtle);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      outline: none;
+      transition: all 0.15s ease;
+      color: var(--text-primary);
+    }
+
+    .form-input:focus, .form-select:focus {
+      background: #ffffff;
+      border-color: var(--brand-indigo);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .form-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      cursor: pointer;
+    }
+
+    .portal-progress-box {
+      background: #f8fafc;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      margin-top: 14px;
+    }
+
+    .progress-step-item {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .progress-step-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .step-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #cbd5e1;
+    }
+
+    .progress-step-item.active {
+      color: var(--brand-indigo);
+      font-weight: 600;
+    }
+
+    .progress-step-item.active .step-dot {
+      background: var(--brand-indigo);
+      box-shadow: 0 0 6px var(--brand-indigo);
+    }
+
+    .progress-step-item.done {
+      color: #059669;
+    }
+
+    .progress-step-item.done .step-dot {
+      background: #10b981;
+    }
+
+    .modal-footer {
+      padding: 16px 22px;
+      border-top: 1px solid var(--border-light);
+      background: #fafafa;
+      display: flex;
+      gap: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP ENTERPRISE NAVIGATION -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="brand-wrapper">
+        <img src="data:image/png;base64,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" alt="TallyWalls" class="brand-logo-img">
+        <div class="brand-divider"></div>
+        <div class="brand-text">
+          <h1>TallyWalls-GST Intelligence & Reconciliation Hub <span class="tag-version">v2.4</span></h1>
+          <p>Automated GSTR-2B Statutory Portal vs. ERP Purchase Ledger Audit Engine</p>
+        </div>
+      </div>
+
+      <div class="nav-controls">
+        <div class="badge-status">
+          <span class="status-indicator-dot"></span>
+          <span>Local Engine Active</span>
+        </div>
+
+        <button id="btnLoadSample" class="btn-ui btn-accent">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m13 2-2 10h9L7 22l2-10H0z"/>
+          </svg>
+          <span>Load Enterprise Demo</span>
+        </button>
+
+        <a href="/static/../../gst_financial_terms_guide.html" target="_blank" class="btn-ui btn-ghost">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+          <span>Statutory Terms</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN APP SHELL -->
+  <main class="shell-container">
+
+    <!-- INGESTION PANEL -->
+    <section class="ingestion-card">
+      <div class="section-meta">
+        <div>
+          <h2>Source Documents Ingestion</h2>
+          <p>Upload statutory GSTR-2B portal exports and internal ERP purchase registers (Tally Prime, SAP, Busy, or Zoho).</p>
+        </div>
+      </div>
+
+      <div class="dual-drop-grid">
+        <!-- GSTR-2B Drop Card -->
+        <div class="drop-card" id="dropZone2B">
+          <input type="file" id="file2B" accept=".xlsx, .xls, .csv, .zip" multiple hidden>
+          <div class="drop-icon-box">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="14" x="2" y="7" rx="2" ry="2"/>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+            </svg>
+          </div>
+          <div class="drop-title">GSTR-2B Statement (Government Portal)</div>
+          <div class="drop-format-hint">Official GST Portal Excel Statement (.xlsx, .xls, .zip) • Supports Multi-Month Batch (Apr-Oct)</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+            <span class="btn-subtle-upload" onclick="event.stopPropagation(); document.getElementById('file2B').click();">Select File</span>
+            <button type="button" id="btnOpenPortalModal" class="btn-portal-trigger" onclick="event.stopPropagation(); openPortalModal();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+              <span>Connect GST Portal</span>
+            </button>
+            <button type="button" id="btnOpenDownloadsModal" class="btn-scan-trigger" onclick="event.stopPropagation(); openDownloadsModal();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>Scan Downloads</span>
+            </button>
+          </div>
+          <div class="file-status-chip" id="fileName2B">No file attached</div>
+        </div>
+
+        <!-- Purchase Register Drop Card -->
+        <div class="drop-card" id="dropZoneBooks">
+          <input type="file" id="fileBooks" accept=".xlsx, .xls, .csv" hidden>
+          <div class="drop-icon-box">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/>
+              <path d="M6 6h10"/>
+              <path d="M6 10h10"/>
+              <path d="M6 14h7"/>
+            </svg>
+          </div>
+          <div class="drop-title">Purchase Register (Books of Accounts)</div>
+          <div class="drop-format-hint">Tally Prime, Busy, Zoho, SAP or custom ERP export (.xlsx, .csv)</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+            <span class="btn-subtle-upload" onclick="event.stopPropagation(); document.getElementById('fileBooks').click();">Select File</span>
+            <button type="button" id="btnOpenTallyModal" class="btn-tally-trigger" onclick="event.stopPropagation(); openTallyModal();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 7h-7"/>
+                <path d="M14 17H5"/>
+                <circle cx="17" cy="17" r="3"/>
+                <circle cx="7" cy="7" r="3"/>
+              </svg>
+              <span>Sync from Tally (Port 9000)</span>
+            </button>
+          </div>
+          <div class="file-status-chip" id="fileNameBooks">No file attached</div>
+        </div>
+      </div>
+
+      <!-- Ingestion Toolbar & Actions -->
+      <div class="action-toolbar">
+        <div class="tolerance-panel">
+          <label for="toleranceInput">Round-off Tolerance:</label>
+          <div class="tolerance-input-box">
+            <span class="tolerance-prefix">₹</span>
+            <input type="number" id="toleranceInput" value="1.00" step="0.50" min="0" max="10.0">
+          </div>
+          <span class="tolerance-desc">(Configurable threshold for minor tax rounding differences)</span>
+        </div>
+
+        <button id="btnReconcile" class="btn-ui btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          <span>Run Reconciliation Engine</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- PROCESSING SHIMMER -->
+    <div id="loadingIndicator" class="reconcile-loader">
+      <div class="loader-pulse"></div>
+      <div class="loader-title" id="loadingText">Processing & Multi-Tier Normalization...</div>
+      <div class="loader-sub">Matching across GSTIN, cleaned invoice numbers, and statutory tax tolerances.</div>
+    </div>
+
+    <!-- RECONCILIATION AUDIT VAULT (Revealed after reconciliation) -->
+    <div id="resultsSection" style="display: none;">
+
+      <!-- EXECUTIVE KPI METRICS -->
+      <div class="kpi-cluster">
+        <!-- Books Total -->
+        <div class="metric-card card-theme-books">
+          <div class="metric-top">
+            <span class="metric-label">Books ITC Claimed</span>
+            <div class="metric-icon-small">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/>
+              </svg>
+            </div>
+          </div>
+          <div class="metric-amount" id="kpiBooksTax">₹0.00</div>
+          <div class="metric-footer" id="kpiBooksCount">0 Invoices in Ledger</div>
+        </div>
+
+        <!-- 2B Total -->
+        <div class="metric-card card-theme-portal">
+          <div class="metric-top">
+            <span class="metric-label">GSTR-2B Available</span>
+            <div class="metric-icon-small">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="20" height="14" x="2" y="7" rx="2" ry="2"/>
+              </svg>
+            </div>
+          </div>
+          <div class="metric-amount" id="kpiPortalTax">₹0.00</div>
+          <div class="metric-footer" id="kpiPortalCount">0 Invoices on Portal</div>
+        </div>
+
+        <!-- Matched Total -->
+        <div class="metric-card card-theme-matched">
+          <div class="metric-top">
+            <span class="metric-label">Eligible Reconciled ITC</span>
+            <div class="metric-icon-small">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6 9 17l-5-5"/>
+              </svg>
+            </div>
+          </div>
+          <div class="metric-amount" id="kpiMatchedTax">₹0.00</div>
+          <div class="metric-footer" id="kpiMatchRate" style="color: #059669; font-weight: 600;">0.0% Match Efficiency</div>
+        </div>
+
+        <!-- Risk Total -->
+        <div class="metric-card card-theme-risk">
+          <div class="metric-top">
+            <span class="metric-label">ITC at Risk (Vendor Default)</span>
+            <div class="metric-icon-small">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+          </div>
+          <div class="metric-amount" id="kpiRiskTax">₹0.00</div>
+          <div class="metric-footer" id="kpiRiskCount" style="color: #dc2626; font-weight: 600;">0 Invoices Missing in 2B</div>
+        </div>
+
+        <!-- Unbooked Total -->
+        <div class="metric-card card-theme-unbooked">
+          <div class="metric-top">
+            <span class="metric-label">Unbooked Purchases</span>
+            <div class="metric-icon-small">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+            </div>
+          </div>
+          <div class="metric-amount" id="kpiUnbookedTax">₹0.00</div>
+          <div class="metric-footer" id="kpiUnbookedCount" style="color: #0284c7; font-weight: 600;">0 Unclaimed Portal Bills</div>
+        </div>
+      </div>
+
+      <!-- AUDIT VAULT CARD -->
+      <section class="recon-vault-card">
+        <!-- Toolbar -->
+        <div class="vault-header-bar">
+          <div class="search-field">
+            <span class="search-icon-pos">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </span>
+            <input type="text" id="tableSearch" placeholder="Filter by counterparty, GSTIN, or invoice number...">
+          </div>
+
+          <button id="btnExportExcel" class="btn-ui btn-export">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>Export Audit Package (.xlsx)</span>
+          </button>
+        </div>
+
+        <!-- Segmented Filter Control -->
+        <div class="segmented-tabs-wrapper">
+          <div class="segmented-tabs">
+            <button class="tab-pill active" data-filter="ALL">
+              <span>All Items</span>
+              <span class="tab-count" id="countAll">0</span>
+            </button>
+            <button class="tab-pill" data-filter="EXACT_MATCH">
+              <span>Exact Match</span>
+              <span class="tab-count" id="countExact">0</span>
+            </button>
+            <button class="tab-pill" data-filter="NORMALIZED_MATCH">
+              <span>Format Resolved</span>
+              <span class="tab-count" id="countNorm">0</span>
+            </button>
+            <button class="tab-pill" data-filter="PROBABLE_TYPO">
+              <span>Probable Typo</span>
+              <span class="tab-count" id="countTypo">0</span>
+            </button>
+            <button class="tab-pill" data-filter="VALUE_MISMATCH">
+              <span>Value Discrepancy</span>
+              <span class="tab-count" id="countMismatch">0</span>
+            </button>
+            <button class="tab-pill" data-filter="MISSING_IN_2B">
+              <span>ITC at Risk</span>
+              <span class="tab-count" id="countRisk">0</span>
+            </button>
+            <button class="tab-pill" data-filter="MISSING_IN_BOOKS">
+              <span>Unbooked Bills</span>
+              <span class="tab-count" id="countUnbooked">0</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Table Subheader Bar with Live Count -->
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 18px; font-size:0.78rem; color:var(--text-secondary); background:#f8fafc; border-bottom:1px solid var(--border-subtle);">
+          <span id="tableCountLabel" style="font-weight:600; color:var(--text-primary);">Showing 0 of 0 invoices</span>
+          <span style="font-size:0.72rem; color:var(--text-tertiary);">Finance-Grade Audit View • Tax Variance Isolated</span>
+        </div>
+
+        <!-- Ledger Viewport -->
+        <div class="table-viewport">
+          <table class="ledger-table" id="reconTable">
+            <thead>
+              <!-- Super Header Grouping -->
+              <tr>
+                <th rowspan="2" style="width: 140px;">Audit Status</th>
+                <th rowspan="2" style="width: 220px;">Counterparty Details</th>
+                <th colspan="4" class="th-group-books">Internal ERP Ledger (Books)</th>
+                <th colspan="4" class="th-group-portal">Statutory Portal (GSTR-2B)</th>
+                <th rowspan="2" class="num-cell" style="width: 110px;">Tax Variance</th>
+                <th rowspan="2">Audit Findings</th>
+              </tr>
+              <!-- Sub Header Columns -->
+              <tr>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th class="num-cell">Taxable (₹)</th>
+                <th class="num-cell">Tax (₹)</th>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th class="num-cell">Taxable (₹)</th>
+                <th class="num-cell">Tax (₹)</th>
+              </tr>
+            </thead>
+            <tbody id="reconTableBody">
+              <!-- Rendered via JavaScript -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- GST PORTAL DIRECT BRIDGE MODAL -->
+    <div id="portalModal" class="modal-overlay" style="display: none;">
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-header-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="14" x="2" y="7" rx="2" ry="2"/>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+            </svg>
+          </div>
+          <div>
+            <h3>GST Portal Direct Bridge</h3>
+            <p class="modal-sub">Direct session bridge to <code>services.gst.gov.in/services/login</code></p>
+          </div>
+          <button type="button" class="btn-modal-close" onclick="closePortalModal()">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Mode Switcher: Batch Mode vs Single Month -->
+          <div style="display:flex; background:var(--surface-subtle); padding:3px; border-radius:var(--radius-sm); margin-bottom:14px; gap:4px; border:1px solid var(--border-light);">
+            <button type="button" id="tabModeBatch" class="btn-ui" style="flex:1; font-size:0.78rem; padding:6px 12px; border-radius:4px; background:#2563eb; color:#ffffff;" onclick="setPortalModalMode('batch')">
+              Multi-Month Batch (Apr - Oct 2026)
+            </button>
+            <button type="button" id="tabModeSingle" class="btn-ui" style="flex:1; font-size:0.78rem; padding:6px 12px; border-radius:4px; background:transparent; color:var(--text-secondary);" onclick="setPortalModalMode('single')">
+              Single Month Mode
+            </button>
+          </div>
+
+          <div class="portal-info-banner" id="portalBannerBatch">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            <div>
+              <strong>Multi-Month Batch Engine (April to October, FY 2026-27)</strong>:
+              Sequentially selects each statutory month on the GST Portal, clicks <strong>DOWNLOAD</strong> on GSTR-2B, captures the Excel statement (.xlsx), repeats across <strong>7 months</strong>, and automatically consolidates them to reconcile against your continuous Tally purchase ledger in one go.
+            </div>
+          </div>
+
+          <div class="portal-info-banner" id="portalBannerSingle" style="display:none;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            <div>
+              <strong>Single Month Bridge</strong>:
+              Automates selection and Excel download for a single statutory return period on <code>services.gst.gov.in</code>.
+            </div>
+          </div>
+
+          <div class="form-row-grid">
+            <div class="form-group">
+              <label for="portalFY">Financial Year:</label>
+              <select id="portalFY" class="form-select">
+                <option value="2026-27" selected>2026-27 (Current FY)</option>
+                <option value="2025-26">2025-26</option>
+                <option value="2024-25">2024-25</option>
+                <option value="2023-24">2023-24</option>
+                <option value="2022-23">2022-23</option>
+              </select>
+            </div>
+
+            <!-- Batch Period Range Display -->
+            <div class="form-group" id="groupBatchRange">
+              <label>Statutory Batch Range:</label>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <select id="portalStartMonth" class="form-select" style="flex:1;">
+                  <option value="04" selected>April</option>
+                  <option value="05">May</option>
+                  <option value="06">June</option>
+                </select>
+                <span style="font-size:0.8rem; color:var(--text-tertiary); font-weight:600;">to</span>
+                <select id="portalEndMonth" class="form-select" style="flex:1;">
+                  <option value="10" selected>October</option>
+                  <option value="09">September</option>
+                  <option value="08">August</option>
+                  <option value="07">July</option>
+                  <option value="06">June</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Single Month Dropdown -->
+            <div class="form-group" id="groupSingleMonth" style="display:none;">
+              <label for="portalPeriod">Return Period (Month):</label>
+              <select id="portalPeriod" class="form-select">
+                <option value="042026" selected>April</option>
+                <option value="052026">May</option>
+                <option value="062026">June</option>
+                <option value="072026">July</option>
+                <option value="082026">August</option>
+                <option value="092026">September</option>
+                <option value="102026">October</option>
+                <option value="112026">November</option>
+                <option value="122026">December</option>
+                <option value="012027">January</option>
+                <option value="022027">February</option>
+                <option value="032027">March</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="portalReturnType">Statutory Statement Type (Excel):</label>
+            <select id="portalReturnType" class="form-select">
+              <option value="GSTR-2B" selected>GSTR-2B (Excel Statement - Statutory Default)</option>
+              <option value="GSTR-2A">GSTR-2A (Excel Statement)</option>
+            </select>
+          </div>
+
+          <div id="credsStatusBadge" style="display: none; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 6px; margin-bottom: 14px; font-size: 0.8rem; color: #059669;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <span>Saved credentials loaded locally (AES-256 encrypted)</span>
+            </div>
+            <button type="button" onclick="clearSavedCredentials()" style="background: none; border: none; color: #dc2626; font-size: 0.75rem; cursor: pointer; text-decoration: underline;">Clear</button>
+          </div>
+
+          <div class="form-group">
+            <label for="portalUsername">GST Portal Username:</label>
+            <input type="text" id="portalUsername" class="form-input" placeholder="Enter your GST Portal username" autocomplete="off">
+          </div>
+
+          <div class="form-group">
+            <label for="portalPassword">GST Portal Password:</label>
+            <div style="position: relative;">
+              <input type="password" id="portalPassword" class="form-input" placeholder="Enter your GST Portal password" autocomplete="off" style="padding-right: 50px;">
+              <button type="button" id="btnTogglePass" onclick="togglePasswordVisibility()" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 0.75rem; padding: 4px;">Show</button>
+            </div>
+          </div>
+
+          <div class="form-checkbox">
+            <input type="checkbox" id="portalSaveCreds" checked>
+            <label for="portalSaveCreds">Remember credentials locally with AES-256 encryption</label>
+          </div>
+
+          <!-- Real-time Status Progress Box -->
+          <div id="portalProgressBox" class="portal-progress-box" style="display: none;">
+            <div class="progress-step-item" id="pStep1">
+              <span class="step-dot"></span> 1. Connecting to <code>services.gst.gov.in/services/login</code>...
+            </div>
+            <div class="progress-step-item" id="pStep2">
+              <span class="step-dot"></span> 2. Autofilling credentials & awaiting CAPTCHA entry...
+            </div>
+            <div class="progress-step-item" id="pStep3">
+              <span class="step-dot"></span> 3. Authenticated! Navigating legitimately to Return Dashboard...
+            </div>
+            <div class="progress-step-item" id="pStep4">
+              <span class="step-dot"></span> 4. GSTR-2B downloaded & auto-ingested into ledger!
+            </div>
+          </div>
+
+          <button type="button" class="btn-ui btn-ghost" onclick="closePortalModal(); openDownloadsModal();" style="margin-top: 14px; width: 100%; border: 1px dashed var(--border-light); font-size: 0.8rem; color: var(--text-secondary);">
+            Already downloaded in your browser? Click to Auto-Detect from Downloads Folder
+          </button>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnLaunchBridge" class="btn-ui btn-accent" style="flex: 2;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/>
+              <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            <span>Launch Portal Bridge (services.gst.gov.in)</span>
+          </button>
+
+          <button type="button" id="btnSimulatePortal" class="btn-ui btn-ghost" style="flex: 1;">
+            <span>Simulate Fetch</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECENT DOWNLOADS SCANNER MODAL -->
+    <div id="downloadsModal" class="modal-overlay" style="display: none;">
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-header-icon" style="background:#f0f9ff; color:#0284c7;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </div>
+          <div>
+            <h3>Recent GSTR-2B Excel Downloads</h3>
+            <p class="modal-sub">Auto-detect Excel statements (.xlsx, .xls, .zip) downloaded from portal</p>
+          </div>
+          <button type="button" class="btn-modal-close" onclick="closeDownloadsModal()">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <div id="downloadsScanningState" style="text-align:center; padding:24px 0; color:var(--text-secondary);">
+            Scanning local Downloads directory...
+          </div>
+          <div id="downloadsListContainer" style="display:none; max-height:280px; overflow-y:auto;">
+            <!-- Rendered via JavaScript -->
+          </div>
+          <div id="downloadsEmptyState" style="display:none; text-align:center; padding:24px 16px; background:#f8fafc; border:1px dashed var(--border-light); border-radius:var(--radius-md);">
+            <div style="font-weight:600; color:var(--text-primary); margin-bottom:4px;">No Recent GSTR-2B Downloads Detected</div>
+            <div style="font-size:0.82rem; color:var(--text-secondary);">Download your GSTR-2B from <code>services.gst.gov.in</code> in any browser, or use the Direct Portal Bridge.</div>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="display:flex; justify-content:space-between; gap:8px;">
+          <button type="button" class="btn-ui btn-ghost" onclick="closeDownloadsModal()">Close</button>
+          <div style="display:flex; gap:8px;">
+            <button type="button" id="btnAttachAllDownloads" class="btn-ui btn-accent" onclick="attachAllScannedStatements()" style="display:none; font-size:0.78rem;">
+              Attach All (Batch Ingest)
+            </button>
+            <button type="button" class="btn-ui btn-primary" onclick="scanRecentDownloadsFolder()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                <path d="M16 21h5v-5"/>
+              </svg>
+              <span>Refresh Scan</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TALLY PRIME DIRECT SYNC MODAL -->
+    <div id="tallyModal" class="modal-overlay" style="display: none;">
+      <div class="modal-window">
+        <div class="modal-header">
+          <div class="modal-header-icon" style="background:#ecfdf5; color:#059669;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 7h-7"/>
+              <path d="M14 17H5"/>
+              <circle cx="17" cy="17" r="3"/>
+              <circle cx="7" cy="7" r="3"/>
+            </svg>
+          </div>
+          <div>
+            <h3>Tally Prime Direct Synchronization</h3>
+            <p class="modal-sub">Live XML/HTTP connector via <code>http://localhost:9000</code></p>
+          </div>
+          <button type="button" class="btn-modal-close" onclick="closeTallyModal()">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:#f8fafc; border:1px solid var(--border-light); border-radius:var(--radius-md); margin-bottom:14px;">
+            <div>
+              <div style="font-size:0.85rem; font-weight:600; color:var(--text-primary);">Tally Server Status</div>
+              <div id="tallyStatusText" style="font-size:0.78rem; color:var(--text-secondary);">Probing port 9000...</div>
+            </div>
+            <span id="tallyStatusBadge" class="tally-status-badge inactive">Checking...</span>
+          </div>
+
+          <div class="portal-info-banner" style="background:#f0fdf4; border-color:#bbf7d0; color:#166534; margin-bottom:14px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            <div>
+              <strong>Instant ERP Integration</strong>: Pulls Purchase Vouchers directly from your active company without manually exporting Excel or CSV files.
+            </div>
+          </div>
+
+          <div style="background:#ffffff; border:1px solid var(--border-light); border-radius:var(--radius-md); padding:12px 16px; font-size:0.8rem; color:var(--text-secondary); line-height:1.6;">
+            <strong>To enable XML server in Tally Prime:</strong>
+            <ol style="margin-left:18px; margin-top:4px;">
+              <li>In Tally Prime, press <b>F1: Help</b> &rarr; <b>Settings</b> &rarr; <b>Connectivity</b>.</li>
+              <li>Set <b>Client/Server configuration</b> &rarr; <b>Enable ODBC/HTTP: Yes</b> and <b>Port: 9000</b>.</li>
+              <li>Restart Tally Prime and open your company.</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnSyncTallyLive" class="btn-ui btn-primary" style="flex:2;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+              <path d="M16 21h5v-5"/>
+            </svg>
+            <span>Sync Live Purchase Register</span>
+          </button>
+          <button type="button" id="btnSimulateTally" class="btn-ui btn-ghost" style="flex:1;">
+            <span>Demo Sync</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="app-footer">
+    <p>TallyWalls-GST Intelligence & Reconciliation Hub • Statutory Compliance Framework • Indian Enterprise Edition</p>
+  </footer>
+
+  <script src="/static/js/app.js?v=2.7.0"></script>
+</body>
+</html>

@@ -50,7 +50,7 @@ app = FastAPI(
 @app.middleware("http")
 async def vercel_path_normalizer(request: Request, call_next):
     orig_path = request.headers.get("x-matched-path") or request.headers.get("x-invoke-path")
-    if orig_path:
+    if orig_path and not any(ch in orig_path for ch in ("*", "(", ")", "$")) and not orig_path.endswith("index.py"):
         if "?" in orig_path:
             orig_path = orig_path.split("?")[0]
         request.scope["path"] = orig_path
