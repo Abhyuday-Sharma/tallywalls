@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/icon-192.png">
   <title>TallyWalls-GST Intelligence & Reconciliation Hub | GSTR-2B vs. Books</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=2.1">
+  <link rel="stylesheet" href="/static/css/style.css?v=2.2">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
@@ -1243,20 +1243,25 @@
       inset: 0;
       background: rgba(15, 23, 42, 0.65);
       backdrop-filter: blur(4px);
-      z-index: 100;
+      z-index: 1000;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 32px 24px;
+      overflow-y: auto;
     }
 
     .modal-window {
       background: #ffffff;
       border: 1px solid var(--border-light);
       border-radius: var(--radius-lg);
-      width: 100%;
-      max-width: 580px;
-      box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.15), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+      width: min(560px, calc(100vw - 48px));
+      max-width: 560px;
+      max-height: min(680px, calc(100vh - 80px));
+      margin: auto;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25), 0 10px 15px -3px rgb(0 0 0 / 0.1);
       overflow: hidden;
       animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
@@ -1267,12 +1272,13 @@
     }
 
     .modal-header {
-      padding: 18px 22px;
+      padding: 16px 22px;
       border-bottom: 1px solid var(--border-light);
       display: flex;
       align-items: center;
       gap: 12px;
       background: #fafafa;
+      flex-shrink: 0;
     }
 
     .modal-header-icon {
@@ -1320,20 +1326,23 @@
     }
 
     .modal-body {
-      padding: 22px;
+      padding: 18px 22px;
+      overflow-y: auto;
+      flex: 1 1 auto;
+      min-height: 0;
     }
 
     .portal-info-banner {
       background: #f0fdf4;
       border: 1px solid #bbf7d0;
       border-radius: var(--radius-sm);
-      padding: 12px 14px;
-      font-size: 0.8rem;
+      padding: 10px 12px;
+      font-size: 0.78rem;
       color: #166534;
       display: flex;
       gap: 10px;
-      margin-bottom: 18px;
-      line-height: 1.45;
+      margin-bottom: 12px;
+      line-height: 1.42;
     }
 
     .portal-info-banner svg {
@@ -1344,20 +1353,26 @@
     .form-row-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      margin-bottom: 14px;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    @media (max-width: 560px) {
+      .form-row-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     .form-group {
-      margin-bottom: 14px;
+      margin-bottom: 10px;
     }
 
     .form-group label {
       display: block;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       font-weight: 600;
       color: var(--text-secondary);
-      margin-bottom: 6px;
+      margin-bottom: 5px;
     }
 
     .form-input, .form-select {
@@ -1385,7 +1400,7 @@
       gap: 8px;
       font-size: 0.78rem;
       color: var(--text-secondary);
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       cursor: pointer;
     }
 
@@ -1393,8 +1408,8 @@
       background: #f8fafc;
       border: 1px solid var(--border-light);
       border-radius: var(--radius-sm);
-      padding: 14px;
-      margin-top: 14px;
+      padding: 12px 14px;
+      margin-top: 12px;
     }
 
     .progress-step-item {
@@ -1436,11 +1451,24 @@
     }
 
     .modal-footer {
-      padding: 16px 22px;
+      padding: 14px 22px;
       border-top: 1px solid var(--border-light);
       background: #fafafa;
       display: flex;
       gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .modal-footer .btn-ghost {
+      color: var(--text-primary);
+      background: #ffffff;
+      border-color: var(--border-light);
+    }
+
+    .modal-footer .btn-ghost:hover {
+      background: var(--surface-subtle);
+      border-color: #cbd5e1;
+      color: var(--text-primary);
     }
   </style>
 </head>
@@ -1770,7 +1798,9 @@
 
     </div>
 
-    <!-- GST PORTAL DIRECT BRIDGE MODAL -->
+  </main>
+
+  <!-- GST PORTAL DIRECT BRIDGE MODAL -->
     <div id="portalModal" class="modal-overlay" style="display: none;">
       <div class="modal-window">
         <div class="modal-header">
@@ -1894,16 +1924,18 @@
             <button type="button" onclick="clearSavedCredentials()" style="background: none; border: none; color: #dc2626; font-size: 0.75rem; cursor: pointer; text-decoration: underline;">Clear</button>
           </div>
 
-          <div class="form-group">
-            <label for="portalUsername">GST Portal Username:</label>
-            <input type="text" id="portalUsername" class="form-input" placeholder="Enter your GST Portal username" autocomplete="off">
-          </div>
+          <div class="form-row-grid">
+            <div class="form-group" style="margin-bottom:0;">
+              <label for="portalUsername">GST Portal Username:</label>
+              <input type="text" id="portalUsername" class="form-input" placeholder="Enter your GST Portal username" autocomplete="off">
+            </div>
 
-          <div class="form-group">
-            <label for="portalPassword">GST Portal Password:</label>
-            <div style="position: relative;">
-              <input type="password" id="portalPassword" class="form-input" placeholder="Enter your GST Portal password" autocomplete="off" style="padding-right: 50px;">
-              <button type="button" id="btnTogglePass" onclick="togglePasswordVisibility()" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 0.75rem; padding: 4px;">Show</button>
+            <div class="form-group" style="margin-bottom:0;">
+              <label for="portalPassword">GST Portal Password:</label>
+              <div style="position: relative;">
+                <input type="password" id="portalPassword" class="form-input" placeholder="Enter your GST Portal password" autocomplete="off" style="padding-right: 50px;">
+                <button type="button" id="btnTogglePass" onclick="togglePasswordVisibility()" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 0.75rem; padding: 4px;">Show</button>
+              </div>
             </div>
           </div>
 
@@ -2142,8 +2174,6 @@
         </div>
       </div>
     </div>
-
-  </main>
 
   <footer class="app-footer">
     <p>TallyWalls-GST Intelligence &amp; Reconciliation Hub &bull; Statutory Compliance Framework &bull; Indian Enterprise Edition</p>
