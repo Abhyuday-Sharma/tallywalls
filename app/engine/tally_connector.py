@@ -190,12 +190,15 @@ def fetch_purchase_vouchers_from_tally(
 
 def simulate_tally_sync() -> pd.DataFrame:
     """Return benchmark Purchase Register data when Tally is offline for demo."""
+    import sys
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    sample_file = os.path.join(
-        project_root,
-        "sample_data",
-        "sample_purchase_register.xlsx"
-    )
-    if os.path.exists(sample_file):
-        return pd.read_excel(sample_file, sheet_name="Purchase Register")
+    meipass = getattr(sys, "_MEIPASS", None)
+    candidates = [
+        os.path.join(meipass, "sample_data", "sample_purchase_register.xlsx") if meipass else "",
+        os.path.join(project_root, "sample_data", "sample_purchase_register.xlsx"),
+        os.path.join(os.getcwd(), "sample_data", "sample_purchase_register.xlsx"),
+    ]
+    for sample_file in candidates:
+        if sample_file and os.path.exists(sample_file):
+            return pd.read_excel(sample_file, sheet_name="Purchase Register")
     return pd.DataFrame()

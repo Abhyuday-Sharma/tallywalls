@@ -36,6 +36,80 @@ def build_border():
     return Border(left=thin, right=thin, top=thin, bottom=thin)
 
 
+def _normalize_results_from_recon(recon_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Accept either legacy nested `results` or slimmed flat `ledger` payloads
+    so /api/reconcile and /api/export avoid duplicating rows in HTTP JSON.
+    """
+    raw_results = recon_data.get("results")
+    if isinstance(raw_results, list) and len(raw_results) > 0:
+        return raw_results
+
+    ledger = recon_data.get("ledger") or []
+    normalized: List[Dict[str, Any]] = []
+    status_labels = {
+        "EXACT_MATCH": "Exact Match",
+        "NORMALIZED_MATCH": "Normalized Match",
+        "PROBABLE_TYPO": "Probable Typo (Verify)",
+        "TYPO_MATCH": "Probable Typo (Verify)",
+        "VALUE_MISMATCH": "Value Mismatch",
+        "MISSING_IN_2B": "Missing in 2B (ITC at Risk)",
+        "MISSING_IN_BOOKS": "Missing in Books (Unbooked)",
+    }
+    for row in ledger:
+        raw_status = row.get("status") or row.get("match_category") or "EXACT_MATCH"
+        canonical_status = "PROBABLE_TYPO" if raw_status == "TYPO_MATCH" else raw_status
+
+        has_books = any([
+            row.get("taxable_books") is not None,
+            row.get("tax_amount_books") is not None,
+            row.get("inv_num_books"),
+            row.get("gstin_books"),
+        ])
+        has_portal = any([
+            row.get("taxable_2b") is not None,
+            row.get("tax_amount_2b") is not None,
+            row.get("inv_num_2b"),
+            row.get("gstin_2b"),
+        ])
+
+        b_taxable = float(row.get("taxable_books") or 0.0)
+        b_tax = float(row.get("tax_amount_books") or 0.0)
+        p_taxable = float(row.get("taxable_2b") or 0.0)
+        p_tax = float(row.get("tax_amount_2b") or 0.0)
+
+        books = {
+            "gstin": row.get("gstin_books") or "",
+            "party_name": row.get("supplier_name_books") or "",
+            "raw_inv": row.get("inv_num_books") or "",
+            "inv_date": row.get("inv_date_books") or "",
+            "taxable": b_taxable,
+            "total_tax": b_tax,
+            "total_inv_val": float(row.get("total_inv_val_books")) if row.get("total_inv_val_books") is not None else round(b_taxable + b_tax, 2),
+        } if has_books else None
+
+        portal = {
+            "gstin": row.get("gstin_2b") or "",
+            "party_name": row.get("supplier_name_2b") or "",
+            "raw_inv": row.get("inv_num_2b") or "",
+            "inv_date": row.get("inv_date_2b") or "",
+            "taxable": p_taxable,
+            "total_tax": p_tax,
+            "total_inv_val": float(row.get("total_inv_val_2b")) if row.get("total_inv_val_2b") is not None else round(p_taxable + p_tax, 2),
+        } if has_portal else None
+
+        normalized.append({
+            "status": canonical_status,
+            "status_label": row.get("status_label") or status_labels.get(canonical_status, canonical_status),
+            "books": books,
+            "portal": portal,
+            "taxable_diff": row.get("taxable_diff", 0.0),
+            "tax_diff": row.get("tax_diff", 0.0),
+            "remarks": row.get("audit_remark") or "",
+        })
+    return normalized
+
+
 def export_reconciliation_excel(recon_data: Dict[str, Any]) -> BytesIO:
     """
     Builds a professional, multi-tab Excel workbook from reconciliation results.
@@ -43,7 +117,7 @@ def export_reconciliation_excel(recon_data: Dict[str, Any]) -> BytesIO:
     """
     wb = openpyxl.Workbook()
     summary = recon_data.get("summary", {})
-    results: List[Dict[str, Any]] = recon_data.get("results", [])
+    results: List[Dict[str, Any]] = _normalize_results_from_recon(recon_data)
 
     # -------------------------------------------------------------
     # SHEET 1: Executive Summary & Dashboard

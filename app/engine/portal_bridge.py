@@ -15,13 +15,39 @@ import glob
 import zipfile
 import tempfile
 import asyncio
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Tuple, List, Callable
 import pandas as pd
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 def _resolve_cache_dir() -> str:
+    env_cache = os.environ.get("TALLYWALLS_CACHE_DIR")
+    if env_cache:
+        try:
+            os.makedirs(env_cache, exist_ok=True)
+            return env_cache
+        except (OSError, PermissionError):
+            pass
+
+    env_cfg = os.environ.get("TALLYWALLS_CONFIG_DIR")
+    if env_cfg:
+        cfg_cache = os.path.join(env_cfg, "cache")
+        try:
+            os.makedirs(cfg_cache, exist_ok=True)
+            return cfg_cache
+        except (OSError, PermissionError):
+            pass
+
+    local_app = os.environ.get("LOCALAPPDATA")
+    if getattr(sys, "frozen", False) and local_app:
+        frozen_dir = os.path.join(local_app, "TallyWalls", "cache")
+        try:
+            os.makedirs(frozen_dir, exist_ok=True)
+            return frozen_dir
+        except (OSError, PermissionError):
+            pass
+
     default_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cache")
     try:
         os.makedirs(default_dir, exist_ok=True)
@@ -31,6 +57,13 @@ def _resolve_cache_dir() -> str:
         os.remove(test_file)
         return default_dir
     except (OSError, PermissionError):
+        if local_app:
+            la_dir = os.path.join(local_app, "TallyWalls", "cache")
+            try:
+                os.makedirs(la_dir, exist_ok=True)
+                return la_dir
+            except (OSError, PermissionError):
+                pass
         tmp_dir = os.path.join(tempfile.gettempdir(), "tallywalls_cache")
         try:
             os.makedirs(tmp_dir, exist_ok=True)
@@ -46,9 +79,10 @@ except Exception:
     pass
 
 CRED_FILE = os.path.join(CACHE_DIR, "portal_profile.enc")
+KEY_FILE = os.path.join(CACHE_DIR, ".key.bin")
 
 
-def _get_encryption_key() -> bytes:
+def _get_legacy_encryption_key() -> bytes:
     salt = b"FinRecon_GST_India_Secure_Salt_2024"
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
@@ -58,6 +92,22 @@ def _get_encryption_key() -> bytes:
     )
     machine_id = os.environ.get("USERNAME", os.environ.get("USER", "DefaultUser")).encode()
     return base64.urlsafe_b64encode(kdf.derive(machine_id))
+
+
+def _get_encryption_key() -> bytes:
+    if os.path.exists(KEY_FILE):
+        with open(KEY_FILE, "rb") as f:
+            key = f.read().strip()
+        if key:
+            return key
+    key = Fernet.generate_key()
+    with open(KEY_FILE, "wb") as f:
+        f.write(key)
+    try:
+        os.chmod(KEY_FILE, 0o600)
+    except OSError:
+        pass
+    return key
 
 
 def save_credentials(username: str, password: str, gstin: str = "") -> bool:
@@ -83,11 +133,20 @@ def load_credentials() -> Dict[str, str]:
     if not os.path.exists(CRED_FILE):
         return {"username": "", "password": "", "gstin": ""}
     try:
-        fernet = Fernet(_get_encryption_key())
         with open(CRED_FILE, "rb") as f:
             encrypted = f.read()
-        decrypted = fernet.decrypt(encrypted)
-        return json.loads(decrypted.decode("utf-8"))
+        try:
+            fernet = Fernet(_get_encryption_key())
+            decrypted = fernet.decrypt(encrypted)
+            return json.loads(decrypted.decode("utf-8"))
+        except Exception:
+            # Backward-compatibility fallback for legacy key migration
+            legacy_fernet = Fernet(_get_legacy_encryption_key())
+            decrypted = legacy_fernet.decrypt(encrypted)
+            data = json.loads(decrypted.decode("utf-8"))
+            if data.get("username") and data.get("password"):
+                save_credentials(data["username"], data["password"], data.get("gstin", ""))
+            return data
     except Exception as e:
         print(f"Failed to decrypt credentials: {e}")
         return {"username": "", "password": "", "gstin": ""}
@@ -1126,7 +1185,8 @@ def execute_portal_bridge_sync(
     username: str,
     password: str,
     timeout_seconds: int = 240,
-    return_type: str = "GSTR-2B"
+    return_type: str = "GSTR-2B",
+    progress_cb: Optional[Callable[[int, str], None]] = None
 ) -> Dict[str, Any]:
     """
     Synchronous Playwright bridge connecting to https://services.gst.gov.in/services/login.
@@ -1136,12 +1196,18 @@ def execute_portal_bridge_sync(
     and runs a dual listener (Playwright download event + local filesystem watcher)
     to capture GSTR-2B whether triggered by automation or direct user click.
     """
+    def _report(step: int, msg: str):
+        if progress_cb:
+            try:
+                progress_cb(step, msg)
+            except Exception:
+                pass
+
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         raise RuntimeError(
-            "Playwright browser automation is configured for local desktop operation (via run_app.bat). "
-            "In cloud or serverless environments, please use Direct File Upload or Load Enterprise Demo mode."
+            "Playwright browser automation requires a local desktop environment (via TallyWalls Connector or desktop app)."
         )
 
     login_url = "https://services.gst.gov.in/services/login"
@@ -1155,6 +1221,7 @@ def execute_portal_bridge_sync(
         username = username or stored_creds.get("username", "")
         password = password or stored_creds.get("password", "")
 
+    _report(1, "Launching desktop browser & connecting to GST Portal...")
     with sync_playwright() as p:
         browser = _launch_browser(p)
         context = browser.new_context(
@@ -1264,6 +1331,8 @@ def execute_portal_bridge_sync(
             except Exception as e:
                 print(f"Autofill note: {e}")
 
+            _report(2, "Credentials autofilled! Waiting for CAPTCHA entry & login in browser...")
+
             # Step 4: Wait for user to complete CAPTCHA & Authentication
             print(f"Portal Bridge: Waiting for login (timeout: {timeout_seconds}s)...")
             authenticated = False
@@ -1292,6 +1361,7 @@ def execute_portal_bridge_sync(
                 raise Exception("Authentication timed out. Please check your credentials and CAPTCHA.")
 
             print("Portal Bridge: Authentication confirmed!")
+            _report(3, f"Authenticated! Navigating to Return Dashboard for {p_info['name']} ({fy})...")
 
             # Update HUD banner
             try:
@@ -1406,6 +1476,7 @@ def execute_portal_bridge_sync(
             if df.empty:
                 raise Exception(f"The downloaded GSTR-2B file for {p_info['name']} contains 0 invoice records or is empty.")
 
+            _report(4, f"Captured & parsed {len(df)} GSTR-2B invoices from {os.path.basename(captured_file)}!")
             browser.close()
             return {
                 "status": "success",
@@ -1423,15 +1494,24 @@ def execute_portal_bridge_sync(
             raise e
 
 
+def _resolve_sample_file(filename: str) -> Optional[str]:
+    meipass = getattr(sys, "_MEIPASS", None)
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    candidates = [
+        os.path.join(meipass, "sample_data", filename) if meipass else "",
+        os.path.join(project_root, "sample_data", filename),
+        os.path.join(os.getcwd(), "sample_data", filename),
+    ]
+    for c in candidates:
+        if c and os.path.exists(c):
+            return c
+    return None
+
+
 def simulate_portal_download(fy: str, return_period: str) -> pd.DataFrame:
     """Simulation mode: Returns benchmark GSTR-2B dataset for demonstration."""
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    sample_file = os.path.join(
-        project_root,
-        "sample_data",
-        "sample_gstr2b.xlsx"
-    )
-    if os.path.exists(sample_file):
+    sample_file = _resolve_sample_file("sample_gstr2b.xlsx")
+    if sample_file and os.path.exists(sample_file):
         return pd.read_excel(sample_file, sheet_name="B2B")
     return pd.DataFrame()
 
@@ -1464,7 +1544,8 @@ def execute_multi_month_portal_bridge_sync(
     username: str = "",
     password: str = "",
     timeout_seconds: int = 480,
-    return_type: str = "GSTR-2B"
+    return_type: str = "GSTR-2B",
+    progress_cb: Optional[Callable[[int, str], None]] = None
 ) -> Dict[str, Any]:
     """
     Automated Multi-Month Batch GSTR-2B Sync across Financial Year sequence (e.g. April to October).
@@ -1480,12 +1561,18 @@ def execute_multi_month_portal_bridge_sync(
        - Safely returns to Dashboard via in-page navigation (never page.go_back)
     5. Consolidates all 7 monthly Excel statements into a single unified audit dataset.
     """
+    def _report(step: int, msg: str):
+        if progress_cb:
+            try:
+                progress_cb(step, msg)
+            except Exception:
+                pass
+
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         raise RuntimeError(
-            "Playwright browser automation is configured for local desktop operation (via run_app.bat). "
-            "In cloud or serverless environments, please use Direct File Upload or Load Enterprise Demo mode."
+            "Playwright browser automation requires a local desktop environment (via TallyWalls Connector or desktop app)."
         )
 
     login_url = "https://services.gst.gov.in/services/login"
@@ -1498,6 +1585,7 @@ def execute_multi_month_portal_bridge_sync(
         username = username or stored_creds.get("username", "")
         password = password or stored_creds.get("password", "")
 
+    _report(1, f"Launching desktop browser for {len(month_sequence)}-month batch sync ({fy})...")
     with sync_playwright() as p:
         browser = _launch_browser(p)
         context = browser.new_context(
@@ -1596,6 +1684,8 @@ def execute_multi_month_portal_bridge_sync(
                 if (el) el.innerHTML = 'Credentials Autofilled! Enter the 6 CAPTCHA letters and click <b>LOGIN</b>. The agent will then download all {len(month_sequence)} months automatically.';
             }}""")
 
+            _report(2, "Credentials autofilled! Enter CAPTCHA & click LOGIN in the browser...")
+
             # Await user authentication
             authenticated = False
             deadline = time.time() + timeout_seconds
@@ -1612,6 +1702,7 @@ def execute_multi_month_portal_bridge_sync(
                 raise Exception("Login timed out. Please check your credentials and CAPTCHA.")
 
             print("Portal Bridge: Authenticated! Preparing multi-month batch execution...")
+            _report(3, f"Authenticated! Preparing {len(month_sequence)}-month download sequence...")
             page.wait_for_timeout(2000)
 
             # Navigate from fowelcome if needed
@@ -1632,6 +1723,7 @@ def execute_multi_month_portal_bridge_sync(
                 print(f"\n=======================================================")
                 print(f"Portal Bridge: Processing Month {idx}/{len(month_sequence)}: {m_name} (Quarter: {q_label}, FY: {fy})")
                 print(f"=======================================================")
+                _report(3, f"Downloading month {idx}/{len(month_sequence)}: {m_name} ({fy})...")
 
                 # Update HUD
                 try:
@@ -1718,6 +1810,7 @@ def execute_multi_month_portal_bridge_sync(
             except Exception:
                 pass
 
+            _report(4, f"Consolidated {len(df_merged)} GSTR-2B invoices across {len(month_sequence)} months!")
             browser.close()
 
             return {

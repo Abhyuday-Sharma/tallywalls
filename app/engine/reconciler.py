@@ -8,6 +8,7 @@ Executes 5 sequential matching passes:
 5. Missing in 2B (ITC at Risk) / Missing in Books (Unbooked)
 """
 
+from collections import defaultdict
 from typing import Dict, List, Any, Tuple
 import pandas as pd
 from app.engine.column_mapper import detect_columns
@@ -84,7 +85,8 @@ def prepare_records(df: pd.DataFrame, source_type: str) -> List[Dict[str, Any]]:
 def run_reconciliation(
     df_2b: pd.DataFrame,
     df_books: pd.DataFrame,
-    tolerance: float = 1.00
+    tolerance: float = 1.00,
+    include_results: bool = True
 ) -> Dict[str, Any]:
     """
     Main reconciliation pipeline.
@@ -92,6 +94,12 @@ def run_reconciliation(
     """
     records_2b = prepare_records(df_2b, "2B")
     records_books = prepare_records(df_books, "BOOKS")
+
+    # Bucket 2B records by GSTIN so passes run in O(N) per vendor instead of O(N*M)
+    records_2b_by_gstin: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for p in records_2b:
+        if p["gstin"]:
+            records_2b_by_gstin[p["gstin"]].append(p)
 
     matched_2b_ids = set()
     matched_books_ids = set()
@@ -109,8 +117,8 @@ def run_reconciliation(
     for b in records_books:
         if b["id"] in matched_books_ids or not b["gstin"]:
             continue
-        for p in records_2b:
-            if p["id"] in matched_2b_ids or p["gstin"] != b["gstin"]:
+        for p in records_2b_by_gstin.get(b["gstin"], ()):
+            if p["id"] in matched_2b_ids:
                 continue
             if b["clean_inv"] and b["clean_inv"] == p["clean_inv"] and amounts_match(b, p):
                 matched_books_ids.add(b["id"])
@@ -134,8 +142,8 @@ def run_reconciliation(
     for b in records_books:
         if b["id"] in matched_books_ids or not b["gstin"]:
             continue
-        for p in records_2b:
-            if p["id"] in matched_2b_ids or p["gstin"] != b["gstin"]:
+        for p in records_2b_by_gstin.get(b["gstin"], ()):
+            if p["id"] in matched_2b_ids:
                 continue
             # Match on core digits or one being substring/stripped zero version
             inv_match = (
@@ -164,8 +172,8 @@ def run_reconciliation(
     for b in records_books:
         if b["id"] in matched_books_ids or not b["gstin"]:
             continue
-        for p in records_2b:
-            if p["id"] in matched_2b_ids or p["gstin"] != b["gstin"]:
+        for p in records_2b_by_gstin.get(b["gstin"], ()):
+            if p["id"] in matched_2b_ids:
                 continue
             if amounts_match(b, p):
                 # Amount matches perfectly, check if invoice has typo (e.g. 49 vs 94)
@@ -193,8 +201,8 @@ def run_reconciliation(
     for b in records_books:
         if b["id"] in matched_books_ids or not b["gstin"]:
             continue
-        for p in records_2b:
-            if p["id"] in matched_2b_ids or p["gstin"] != b["gstin"]:
+        for p in records_2b_by_gstin.get(b["gstin"], ()):
+            if p["id"] in matched_2b_ids:
                 continue
             if b["clean_inv"] and (b["clean_inv"] == p["clean_inv"] or b["core_digits"] == p["core_digits"]):
                 matched_books_ids.add(b["id"])
@@ -357,17 +365,21 @@ def run_reconciliation(
             "inv_date_2b": p.get("inv_date", ""),
             "taxable_books": b.get("taxable") if b else None,
             "tax_amount_books": b.get("total_tax") if b else None,
+            "total_inv_val_books": b.get("total_inv_val") if b else None,
             "taxable_2b": p.get("taxable") if p else None,
             "tax_amount_2b": p.get("total_tax") if p else None,
+            "total_inv_val_2b": p.get("total_inv_val") if p else None,
             "tax_diff": r.get("tax_diff", 0.0),
             "taxable_diff": r.get("taxable_diff", 0.0),
             "audit_remark": r.get("remarks", "")
         })
 
-    return {
+    payload = {
         "summary": summary,
-        "results": results,
         "kpis": kpis,
         "ledger": ledger
     }
+    if include_results:
+        payload["results"] = results
+    return payload
 

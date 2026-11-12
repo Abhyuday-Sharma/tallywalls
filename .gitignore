@@ -29,3 +29,5 @@ Thumbs.db
 dist/
 build/
 *.zip
+.pytest_cache/
+TallyWalls_v2.4_Windows/

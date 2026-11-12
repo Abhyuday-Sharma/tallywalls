@@ -92,11 +92,16 @@ async def vercel_path_normalizer(request: Request, call_next):
     response = await call_next(request)
     return response
 
-# Enable CORS for local cross-origin development
+def _is_cloud_env() -> bool:
+    """Detect whether the FastAPI app is running in a cloud/serverless container (e.g., Vercel)."""
+    return bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+
+
+# Enable CORS without insecure wildcard + credentials combination
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -402,7 +407,7 @@ async def reconcile_files(
     if df_books.empty:
         raise HTTPException(status_code=400, detail="Purchase Register file contains no rows.")
 
-    result = run_reconciliation(df_2b, df_books, tolerance=tolerance)
+    result = run_reconciliation(df_2b, df_books, tolerance=tolerance, include_results=False)
     return result
 
 
@@ -418,7 +423,7 @@ async def load_sample_reconciliation(tolerance: float = 1.00):
     df_2b = pd.read_excel(file_2b, sheet_name="B2B")
     df_books = pd.read_excel(file_books, sheet_name="Purchase Register")
 
-    result = run_reconciliation(df_2b, df_books, tolerance=tolerance)
+    result = run_reconciliation(df_2b, df_books, tolerance=tolerance, include_results=False)
     return result
 
 
@@ -450,6 +455,7 @@ class PortalFetchRequest(BaseModel):
     return_type: Optional[str] = "GSTR-2B"
     username: Optional[str] = ""
     password: Optional[str] = ""
+    save_creds: Optional[bool] = False
     simulate: Optional[bool] = False
 
 class LocalFileIngestRequest(BaseModel):
@@ -468,15 +474,28 @@ class TallySyncRequest(BaseModel):
     simulate: Optional[bool] = False
 
 
+def _require_local_desktop(feature_name: str):
+    if _is_cloud_env():
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                f"{feature_name} requires a local Windows environment and cannot execute on cloud servers. "
+                "Please install and start TallyWalls Connector on your PC to enable this feature from the website."
+            )
+        )
+
+
 @app.get("/api/portal/profile")
 async def get_saved_portal_profile():
     """Retrieve non-sensitive saved profile information."""
+    _require_local_desktop("Local GST credential storage")
     return get_public_profile()
 
 
 @app.get("/api/portal/saved-creds")
 async def get_saved_portal_creds():
     """Retrieve locally stored credentials for autofilling the UI."""
+    _require_local_desktop("Local GST credential storage")
     creds = load_credentials()
     u = creds.get("username", "")
     p = creds.get("password", "")
@@ -495,6 +514,7 @@ async def get_saved_portal_creds():
 @app.post("/api/portal/save-profile")
 async def save_portal_profile(req: PortalProfileRequest):
     """Securely store GST portal credentials locally with AES-256 encryption."""
+    _require_local_desktop("Local GST credential storage")
     if req.username.upper() in ("DEMO_USER", "TEST_GST_ACCOUNTANT", "DEMO", "TEST"):
         return {"status": "success", "message": "Example credentials skipped."}
     ok = save_credentials(req.username, req.password, req.gstin)
@@ -506,6 +526,7 @@ async def save_portal_profile(req: PortalProfileRequest):
 @app.post("/api/portal/clear-creds")
 async def clear_portal_creds():
     """Clear locally stored credentials."""
+    _require_local_desktop("Local GST credential storage")
     from app.engine.portal_bridge import clear_credentials
     ok = clear_credentials()
     if not ok:
@@ -519,6 +540,7 @@ async def delete_downloaded_file(req: DeleteDownloadRequest):
     Safely delete a downloaded GSTR-2B file from Downloads or app cache directory.
     Validates path to prevent arbitrary file deletion outside download folders.
     """
+    _require_local_desktop("Local Downloads folder management")
     file_path = os.path.abspath(req.file_path)
     user_downloads = os.path.abspath(get_user_downloads_dir())
     cache_downloads = os.path.abspath(DOWNLOADS_DIR)
@@ -554,6 +576,7 @@ async def scan_downloads_folder():
     """
     Scan the user's Downloads directory and cache for recently downloaded GSTR-2B statements.
     """
+    _require_local_desktop("Local Downloads folder scanner")
     try:
         matches = scan_recent_downloads(max_age_seconds=86400 * 7)
         return {"status": "success", "matches": matches}
@@ -566,6 +589,7 @@ async def ingest_local_file(req: LocalFileIngestRequest):
     """
     Ingest a locally detected GSTR-2B statement (.xlsx, .json, or .zip).
     """
+    _require_local_desktop("Local GSTR-2B file ingestion")
     try:
         df = ingest_gstr2b_file(req.file_path)
         if df.empty:
@@ -585,6 +609,7 @@ async def ingest_batch_statements(req: BatchIngestRequest):
     """
     Ingest and consolidate multiple locally downloaded monthly statements (e.g. April to October).
     """
+    _require_local_desktop("Local batch GSTR-2B ingestion")
     try:
         df = consolidate_gstr2b_statements(req.file_paths, fy=req.financial_year)
         if df.empty:
@@ -606,42 +631,60 @@ async def fetch_2b_from_portal(req: PortalFetchRequest):
     synchronizes CAPTCHA, assists navigation to Return Dashboard,
     and captures GSTR-2B via Playwright download or local Downloads folder watcher.
     Supports single month or sequential multi-month batch sync (April to October).
+    In cloud mode, live portal execution is rejected with HTTP 501; only explicit
+    simulation (`simulate=True`) returns demo rows.
     """
-    creds = load_credentials()
-    username = req.username or creds.get("username", "")
-    password = req.password or creds.get("password", "")
+    is_cloud = _is_cloud_env()
 
-    is_cloud = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
-
-    # Persist non-empty credentials locally with AES-256 encryption (excluding demo/example)
-    if req.username and req.password and not req.simulate and req.username.upper() not in ("DEMO", "DEMO_USER", "TEST"):
-        save_credentials(req.username, req.password)
-
-    if not username and not req.simulate and not is_cloud:
-        raise HTTPException(status_code=400, detail="Portal username is required.")
-
-    # Multi-Month Batch Execution Mode
-    if req.batch_mode:
-        s_m = req.start_month or "04"
-        e_m = req.end_month or "10"
-
-        if req.simulate or username.lower() in ("demo", "test", "simulate") or is_cloud:
+    # Explicit simulation / demo mode (must be opted into explicitly)
+    if req.simulate:
+        if req.batch_mode:
+            s_m = req.start_month or "04"
+            e_m = req.end_month or "10"
             df_2b = simulate_multi_month_download(req.financial_year, s_m, e_m)
-            msg = (
-                f"Cloud Sandbox: Multi-Month GSTR-2B statements ({len(df_2b)} invoices, Apr-Oct) consolidated! "
-                "(Note: Live Playwright desktop bridge launches locally via run_app.bat)."
-                if is_cloud and not req.simulate else
-                f"Successfully simulated Multi-Month GSTR-2B fetch across {s_m} to {e_m} (FY {req.financial_year})."
-            )
             return {
                 "status": "success",
                 "batch_mode": True,
                 "source": "SIMULATED_PORTAL_FETCH",
-                "message": msg,
+                "message": f"Successfully simulated Multi-Month GSTR-2B fetch across {s_m} to {e_m} (FY {req.financial_year}).",
                 "rows_count": len(df_2b),
                 "data_preview": sanitize_df_for_json(df_2b)
             }
+        df_2b = simulate_portal_download(req.financial_year, req.return_period or "042026")
+        return {
+            "status": "success",
+            "batch_mode": False,
+            "source": "SIMULATED_PORTAL_FETCH",
+            "message": f"Successfully simulated GSTR-2B fetch for FY {req.financial_year} ({req.return_period}).",
+            "rows_count": len(df_2b),
+            "data_preview": sanitize_df_for_json(df_2b)
+        }
 
+    # Live GST Portal execution cannot happen inside a cloud serverless container
+    if is_cloud:
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                "Live GST Portal browser automation requires TallyWalls Connector running on your Windows PC. "
+                "Launch TallyWalls Connector or switch to Simulate Fetch / Manual File Upload."
+            )
+        )
+
+    creds = load_credentials()
+    username = (req.username or "").strip() or creds.get("username", "")
+    password = req.password or creds.get("password", "")
+
+    # Persist credentials only when user explicitly opted in via save_creds=True
+    if req.save_creds and req.username and req.password and req.username.upper() not in ("DEMO", "DEMO_USER", "TEST"):
+        save_credentials(req.username, req.password)
+
+    if not username:
+        raise HTTPException(status_code=400, detail="Portal username is required.")
+
+    # Multi-Month Batch Execution Mode (Local desktop)
+    if req.batch_mode:
+        s_m = req.start_month or "04"
+        e_m = req.end_month or "10"
         try:
             bridge_res = await asyncio.to_thread(
                 execute_multi_month_portal_bridge_sync,
@@ -666,40 +709,12 @@ async def fetch_2b_from_portal(req: PortalFetchRequest):
             import traceback
             traceback.print_exc()
             err_msg = str(be).strip() or f"{type(be).__name__}: Portal bridge session ended before batch download completed."
-            is_cloud = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or "Playwright" in err_msg)
-            if is_cloud:
-                df_2b = simulate_multi_month_download(req.financial_year, s_m, e_m)
-                return {
-                    "status": "success",
-                    "batch_mode": True,
-                    "source": "CLOUD_SANDBOX_FETCH",
-                    "message": f"Cloud Sandbox: Multi-Month GSTR-2B statements ({len(df_2b)} invoices, Apr-Oct) consolidated! (Note: Live Playwright desktop bridge launches locally via run_app.bat).",
-                    "rows_count": len(df_2b),
-                    "data_preview": sanitize_df_for_json(df_2b)
-                }
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "detail": f"Batch Portal bridge note: {err_msg}", "message": err_msg}
+                content={"status": "error", "detail": f"Batch Portal bridge error: {err_msg}", "message": err_msg}
             )
 
-    # Single Month Execution Mode
-    if req.simulate or username.lower() in ("demo", "test", "simulate") or is_cloud:
-        df_2b = simulate_portal_download(req.financial_year, req.return_period or "042026")
-        msg = (
-            f"Cloud Sandbox: GSTR-2B statement ({len(df_2b)} invoices) captured for {req.return_period}! "
-            "(Note: Live Playwright desktop bridge launches locally via run_app.bat)."
-            if is_cloud and not req.simulate else
-            f"Successfully simulated GSTR-2B fetch for FY {req.financial_year} ({req.return_period})."
-        )
-        return {
-            "status": "success",
-            "batch_mode": False,
-            "source": "SIMULATED_PORTAL_FETCH",
-            "message": msg,
-            "rows_count": len(df_2b),
-            "data_preview": sanitize_df_for_json(df_2b)
-        }
-
+    # Single Month Execution Mode (Local desktop)
     try:
         bridge_res = await asyncio.to_thread(
             execute_portal_bridge_sync,
@@ -726,20 +741,9 @@ async def fetch_2b_from_portal(req: PortalFetchRequest):
         import traceback
         traceback.print_exc()
         err_msg = str(e).strip() or f"{type(e).__name__}: Portal bridge session ended before file download completed."
-        is_cloud = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or "Playwright" in err_msg)
-        if is_cloud:
-            df_2b = simulate_portal_download(req.financial_year, req.return_period or "042026")
-            return {
-                "status": "success",
-                "batch_mode": False,
-                "source": "CLOUD_SANDBOX_FETCH",
-                "message": f"Cloud Sandbox: GSTR-2B statement ({len(df_2b)} invoices) captured for {req.return_period}! (Note: Live Playwright desktop bridge launches locally via run_app.bat).",
-                "rows_count": len(df_2b),
-                "data_preview": sanitize_df_for_json(df_2b)
-            }
         return JSONResponse(
             status_code=500,
-            content={"status": "error", "detail": f"Portal bridge note: {err_msg}", "message": err_msg}
+            content={"status": "error", "detail": f"Portal bridge error: {err_msg}", "message": err_msg}
         )
 
 
@@ -750,6 +754,15 @@ async def fetch_2b_from_portal(req: PortalFetchRequest):
 @app.get("/api/tally/status")
 async def get_tally_status(host: str = "localhost", port: int = 9000):
     """Check connectivity to local Tally Prime XML HTTP server."""
+    if _is_cloud_env():
+        return {
+            "active": False,
+            "cloud": True,
+            "host": host,
+            "port": port,
+            "company": "",
+            "message": "Cloud web dashboard requires TallyWalls Connector on your Windows PC to reach localhost:9000."
+        }
     status = check_tally_status(host=host, port=port)
     return status
 
@@ -760,22 +773,17 @@ async def sync_purchase_register_from_tally(req: TallySyncRequest):
     Directly query Purchase Register from Tally Prime on port 9000.
     Eliminates manual export/import steps for the accounting team.
     """
-    is_cloud = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
-    if req.simulate or is_cloud:
+    if req.simulate:
         df_books = simulate_tally_sync()
-        msg = (
-            f"Cloud Sandbox: Synchronized Purchase Register ({len(df_books)} vouchers)! "
-            "(Note: Direct Port 9000 sync connects to active Tally Prime when running locally via run_app.bat)."
-            if is_cloud and not req.simulate else
-            "Successfully synchronized Purchase Register from Tally Prime (Demo Mode)."
-        )
         return {
             "status": "success",
             "source": "SIMULATED_TALLY_SYNC",
-            "message": msg,
+            "message": "Successfully synchronized Purchase Register from Tally Prime (Demo Mode).",
             "rows_count": len(df_books),
             "data_preview": sanitize_df_for_json(df_books)
         }
+
+    _require_local_desktop("Live Tally Prime Port 9000 sync")
 
     try:
         df_books = await asyncio.to_thread(
@@ -793,20 +801,15 @@ async def sync_purchase_register_from_tally(req: TallySyncRequest):
             "rows_count": len(df_books),
             "data_preview": sanitize_df_for_json(df_books)
         }
+    except ConnectionError as ce:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Tally Prime unreachable: {str(ce)}"
+        )
     except Exception as e:
-        is_cloud = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or "connect" in str(e).lower())
-        if is_cloud:
-            df_books = simulate_tally_sync()
-            return {
-                "status": "success",
-                "source": "CLOUD_SANDBOX_SYNC",
-                "message": f"Cloud Sandbox: Synchronized Purchase Register ({len(df_books)} vouchers)! (Note: Direct Port 9000 sync connects to active Tally Prime when running locally via run_app.bat).",
-                "rows_count": len(df_books),
-                "data_preview": sanitize_df_for_json(df_books)
-            }
         raise HTTPException(
             status_code=500,
-            detail=f"Tally synchronization notice: {str(e)}"
+            detail=f"Tally synchronization failed: {str(e)}"
         )
 
 
@@ -815,5 +818,6 @@ async def health():
     return {
         "status": "ok",
         "service": "TallyWalls-GST Intelligence & Reconciliation Hub",
-        "version": "2.4.0"
+        "version": "2.4.0",
+        "environment": "cloud" if _is_cloud_env() else "local"
     }

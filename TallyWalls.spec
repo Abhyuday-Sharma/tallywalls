@@ -21,6 +21,7 @@ hiddenimports = [
     'uvicorn.lifespan.on',
     'openpyxl',
     'openpyxl.cell._writer',
+    'xlrd',
     'pandas',
     'cryptography',
     'playwright',
@@ -85,3 +86,4 @@ coll = COLLECT(
     upx_exclude=[],
     name='TallyWalls',
 )
+
