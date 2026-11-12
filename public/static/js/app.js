@@ -614,11 +614,12 @@ function setupEventListeners() {
     renderTable();
   });
 
-  document.querySelectorAll(".tab-pill").forEach(btn => {
+  const reconTabPills = document.querySelectorAll("#workspaceRecon .tab-pill[data-filter]");
+  reconTabPills.forEach(btn => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".tab-pill").forEach(b => b.classList.remove("active"));
+      reconTabPills.forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
-      currentFilter = btn.getAttribute("data-filter");
+      currentFilter = btn.getAttribute("data-filter") || "ALL";
       renderTable();
     });
   });
@@ -1555,11 +1556,12 @@ function renderTable() {
 
   const records = currentReconData.ledger.filter(row => {
     let matchesCategory = true;
-    if (currentFilter === "MATCHED") {
+    const activeFilter = currentFilter || "ALL";
+    if (activeFilter === "MATCHED") {
       matchesCategory = ["EXACT_MATCH", "NORMALIZED_MATCH", "TYPO_MATCH", "PROBABLE_TYPO"].includes(row.match_category);
-    } else if (currentFilter !== "ALL") {
-      matchesCategory = (row.match_category === currentFilter) ||
-                        (currentFilter === "PROBABLE_TYPO" && (row.match_category === "TYPO_MATCH" || row.status === "PROBABLE_TYPO"));
+    } else if (activeFilter !== "ALL") {
+      matchesCategory = (row.match_category === activeFilter) ||
+                        (activeFilter === "PROBABLE_TYPO" && (row.match_category === "TYPO_MATCH" || row.status === "PROBABLE_TYPO"));
     }
 
     if (!matchesCategory) return false;
