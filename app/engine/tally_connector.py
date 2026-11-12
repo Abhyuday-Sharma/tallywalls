@@ -202,3 +202,157 @@ def simulate_tally_sync() -> pd.DataFrame:
         if sample_file and os.path.exists(sample_file):
             return pd.read_excel(sample_file, sheet_name="Purchase Register")
     return pd.DataFrame()
+
+
+def fetch_sales_vouchers_from_tally(
+    host: str = "localhost",
+    port: int = 9000,
+    timeout: float = 10.0,
+) -> pd.DataFrame:
+    """
+    Export Sales & Credit/Debit Note vouchers from Tally Prime XML Server (Port 9000)
+    for GSTR-9 Outward Reconciliation.
+    """
+    status = check_tally_status(host, port, timeout=2.0)
+    if not status["active"]:
+        raise ConnectionError("Tally Prime XML server is not running on port 9000.")
+
+    xml_envelope = """<ENVELOPE>
+        <HEADER>
+            <VERSION>1</VERSION>
+            <TALLYREQUEST>Export</TALLYREQUEST>
+            <TYPE>Collection</TYPE>
+            <ID>SalesRegisterCollection</ID>
+        </HEADER>
+        <BODY>
+            <DESC>
+                <STATICVARIABLES>
+                    <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+                </STATICVARIABLES>
+                <TDL>
+                    <TDLMESSAGE>
+                        <COLLECTION NAME="SalesRegisterCollection">
+                            <TYPE>Voucher</TYPE>
+                            <FILTER>IsOutwardVoucher</FILTER>
+                            <FETCH>Date, VoucherNumber, VoucherTypeName, Reference, PartyName, PartyLedgerName, PartyGSTIN, LedgerEntries.List.*</FETCH>
+                        </COLLECTION>
+                        <SYSTEM TYPE="Formulae" NAME="IsOutwardVoucher">
+                            $$IsSales:$VoucherTypeName OR $$IsCreditNote:$VoucherTypeName OR $$IsDebitNote:$VoucherTypeName
+                        </SYSTEM>
+                    </TDLMESSAGE>
+                </TDL>
+            </DESC>
+        </BODY>
+    </ENVELOPE>"""
+
+    req = urllib.request.Request(
+        f"http://{host}:{port}",
+        data=xml_envelope.encode("utf-8"),
+        headers={"Content-Type": "text/xml;charset=utf-8"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        xml_content = resp.read().decode("utf-8", errors="ignore")
+
+    root = ET.fromstring(xml_content)
+    rows = []
+    for voucher in root.findall(".//VOUCHER"):
+        v_date = voucher.findtext("DATE", "")
+        v_num = voucher.findtext("VOUCHERNUMBER", "")
+        v_type = voucher.findtext("VOUCHERTYPENAME", "Sales")
+        v_ref = voucher.findtext("REFERENCE", "") or v_num
+        party_name = voucher.findtext("PARTYNAME", "") or voucher.findtext("PARTYLEDGERNAME", "")
+        party_gstin = voucher.findtext("PARTYGSTIN", "")
+        taxable = igst = cgst = sgst = cess = 0.0
+        for entry in voucher.findall(".//LEDGERENTRIES.LIST"):
+            ledger = entry.findtext("LEDGERNAME", "").lower()
+            try:
+                amt = abs(float(entry.findtext("AMOUNT", "0")))
+            except ValueError:
+                amt = 0.0
+            if "igst" in ledger or "integrated" in ledger:
+                igst += amt
+            elif "cgst" in ledger or "central" in ledger:
+                cgst += amt
+            elif "sgst" in ledger or "state" in ledger or "utgst" in ledger:
+                sgst += amt
+            elif "cess" in ledger:
+                cess += amt
+            elif "sales" in ledger or "income" in ledger or "service" in ledger or "exempt" in ledger:
+                taxable += amt
+
+        if len(v_date) == 8 and v_date.isdigit():
+            formatted_date = f"{v_date[:4]}-{v_date[4:6]}-{v_date[6:]}"
+        else:
+            formatted_date = v_date
+
+        sign = -1.0 if "credit" in v_type.lower() else 1.0
+        rows.append({
+            "Voucher No": v_num,
+            "Voucher Type": v_type,
+            "Date": formatted_date,
+            "Invoice No": v_ref,
+            "Party Name": party_name,
+            "GSTIN": party_gstin,
+            "Taxable": round(sign * taxable, 2),
+            "IGST": round(sign * igst, 2),
+            "CGST": round(sign * cgst, 2),
+            "SGST": round(sign * sgst, 2),
+            "Cess": round(sign * cess, 2),
+        })
+    return pd.DataFrame(rows)
+
+
+def fetch_gst_expense_ledgers_from_tally(
+    host: str = "localhost",
+    port: int = 9000,
+    timeout: float = 8.0,
+) -> Dict[str, float]:
+    """
+    Query Books Interest on GST & GST Late Fee expense ledgers from Tally Prime.
+    """
+    status = check_tally_status(host, port, timeout=2.0)
+    if not status["active"]:
+        raise ConnectionError("Tally Prime XML server is not running on port 9000.")
+
+    xml_envelope = """<ENVELOPE>
+        <HEADER>
+            <VERSION>1</VERSION>
+            <TALLYREQUEST>Export</TALLYREQUEST>
+            <TYPE>Collection</TYPE>
+            <ID>LedgerExpenses</ID>
+        </HEADER>
+        <BODY>
+            <DESC>
+                <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>
+                <TDL><TDLMESSAGE>
+                    <COLLECTION NAME="LedgerExpenses">
+                        <TYPE>Ledger</TYPE>
+                        <FETCH>Name, ClosingBalance</FETCH>
+                    </COLLECTION>
+                </TDLMESSAGE></TDL>
+            </DESC>
+        </BODY>
+    </ENVELOPE>"""
+    req = urllib.request.Request(
+        f"http://{host}:{port}",
+        data=xml_envelope.encode("utf-8"),
+        headers={"Content-Type": "text/xml;charset=utf-8"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        xml_content = resp.read().decode("utf-8", errors="ignore")
+
+    root = ET.fromstring(xml_content)
+    books_interest = 0.0
+    books_late_fee = 0.0
+    for ldg in root.findall(".//LEDGER"):
+        name = (ldg.attrib.get("NAME") or ldg.findtext("NAME", "")).lower()
+        try:
+            bal = abs(float(ldg.findtext("CLOSINGBALANCE", "0")))
+        except ValueError:
+            bal = 0.0
+        if "gst" in name and "interest" in name:
+            books_interest += bal
+        elif "gst" in name and ("late" in name or "penalty" in name):
+            books_late_fee += bal
+
+    return {"books_interest": round(books_interest, 2), "books_late_fee": round(books_late_fee, 2)}

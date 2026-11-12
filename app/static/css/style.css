@@ -1417,3 +1417,185 @@
       border-color: #cbd5e1;
       color: var(--text-primary);
     }
+
+    /* WORKSPACE HUB SWITCHER & GSTR-9 ANNUAL HUB */
+    .workspace-switcher {
+      display: inline-flex;
+      background: #e2e8f0;
+      padding: 4px;
+      border-radius: var(--radius-md);
+      gap: 4px;
+      margin-bottom: 20px;
+      border: 1px solid #cbd5e1;
+    }
+
+    .ws-tab-btn {
+      font-family: var(--font-sans);
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .ws-tab-btn:hover {
+      color: var(--text-primary);
+    }
+
+    .ws-tab-btn.active {
+      background: #0f172a;
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+    }
+
+    .g9-config-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+      padding: 14px 16px;
+      background: #f8fafc;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      margin-bottom: 18px;
+      align-items: end;
+    }
+
+    .g9-upload-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    @media (max-width: 960px) {
+      .g9-upload-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .g9-panel-box {
+      background: #ffffff;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 18px;
+    }
+
+    .g9-panel-title {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .g9-panel-sub {
+      font-size: 0.76rem;
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+    }
+
+    .g9-file-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #f8fafc;
+      border: 1px dashed #cbd5e1;
+      border-radius: var(--radius-sm);
+      margin-bottom: 10px;
+    }
+
+    .g9-file-row.has-file {
+      border-style: solid;
+      border-color: #10b981;
+      background: #f0fdf4;
+    }
+
+    .g9-file-meta {
+      min-width: 0;
+    }
+
+    .g9-file-meta strong {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-primary);
+    }
+
+    .g9-file-meta span {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--text-tertiary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 290px;
+    }
+
+    .g9-3b-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+      gap: 8px;
+      padding: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      margin-top: 8px;
+    }
+
+    .g9-mini-field label {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 3px;
+    }
+
+    .g9-mini-field input {
+      width: 100%;
+      padding: 5px 8px;
+      font-size: 0.78rem;
+      font-family: var(--font-mono);
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      background: #ffffff;
+    }
+
+    .g9-table-total td {
+      font-weight: 700;
+      background: #f1f5f9;
+      border-top: 2px solid #cbd5e1;
+    }
+
+    .g9-badge-ok {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .g9-badge-warn {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .g9-badge-err {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: #fee2e2;
+      color: #991b1b;
+    }

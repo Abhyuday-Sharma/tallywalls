@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/icon-192.png">
   <title>TallyWalls-GST Intelligence & Reconciliation Hub | GSTR-2B vs. Books</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=2.2">
+  <link rel="stylesheet" href="/static/css/style.css?v=3.0">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
@@ -1470,6 +1470,188 @@
       border-color: #cbd5e1;
       color: var(--text-primary);
     }
+
+    /* WORKSPACE HUB SWITCHER & GSTR-9 ANNUAL HUB */
+    .workspace-switcher {
+      display: inline-flex;
+      background: #e2e8f0;
+      padding: 4px;
+      border-radius: var(--radius-md);
+      gap: 4px;
+      margin-bottom: 20px;
+      border: 1px solid #cbd5e1;
+    }
+
+    .ws-tab-btn {
+      font-family: var(--font-sans);
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .ws-tab-btn:hover {
+      color: var(--text-primary);
+    }
+
+    .ws-tab-btn.active {
+      background: #0f172a;
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+    }
+
+    .g9-config-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+      padding: 14px 16px;
+      background: #f8fafc;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      margin-bottom: 18px;
+      align-items: end;
+    }
+
+    .g9-upload-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    @media (max-width: 960px) {
+      .g9-upload-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .g9-panel-box {
+      background: #ffffff;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 18px;
+    }
+
+    .g9-panel-title {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .g9-panel-sub {
+      font-size: 0.76rem;
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+    }
+
+    .g9-file-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #f8fafc;
+      border: 1px dashed #cbd5e1;
+      border-radius: var(--radius-sm);
+      margin-bottom: 10px;
+    }
+
+    .g9-file-row.has-file {
+      border-style: solid;
+      border-color: #10b981;
+      background: #f0fdf4;
+    }
+
+    .g9-file-meta {
+      min-width: 0;
+    }
+
+    .g9-file-meta strong {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-primary);
+    }
+
+    .g9-file-meta span {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--text-tertiary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 290px;
+    }
+
+    .g9-3b-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+      gap: 8px;
+      padding: 10px;
+      background: #f8fafc;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      margin-top: 8px;
+    }
+
+    .g9-mini-field label {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 3px;
+    }
+
+    .g9-mini-field input {
+      width: 100%;
+      padding: 5px 8px;
+      font-size: 0.78rem;
+      font-family: var(--font-mono);
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      background: #ffffff;
+    }
+
+    .g9-table-total td {
+      font-weight: 700;
+      background: #f1f5f9;
+      border-top: 2px solid #cbd5e1;
+    }
+
+    .g9-badge-ok {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .g9-badge-warn {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .g9-badge-err {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: #fee2e2;
+      color: #991b1b;
+    }
   </style>
 </head>
 <body>
@@ -1521,6 +1703,17 @@
 
   <!-- MAIN APP SHELL -->
   <main class="shell-container">
+
+    <div class="workspace-switcher" role="tablist" aria-label="Module Workspace">
+      <button type="button" id="wsTabRecon" class="ws-tab-btn active" role="tab" aria-selected="true" onclick="switchWorkspace('recon')">
+        GSTR-2B vs. Books Reconciliation
+      </button>
+      <button type="button" id="wsTabGstr9" class="ws-tab-btn" role="tab" aria-selected="false" onclick="switchWorkspace('gstr9')">
+        GSTR-9 Annual Return Hub
+      </button>
+    </div>
+
+    <div id="workspaceRecon">
 
     <!-- INGESTION PANEL -->
     <section class="ingestion-card">
@@ -1797,6 +1990,254 @@
       </section>
 
     </div>
+
+    </div><!-- /#workspaceRecon -->
+
+    <!-- GSTR-9 ANNUAL RETURN HUB WORKSPACE -->
+    <div id="workspaceGstr9" style="display: none;">
+      <section class="ingestion-card">
+        <div class="section-meta" style="flex-wrap:wrap; gap:12px;">
+          <div>
+            <h2>GSTR-9 Annual Return Computation &amp; Audit Hub</h2>
+            <p>Consolidate full-year Sales, Purchases, GSTR-1, GSTR-2B (including Apr-Nov Sec 16(4) cut-off), and GSTR-3B into statutory Tables 4-18 &amp; GSTR-9C tie-out.</p>
+          </div>
+          <button type="button" id="btnG9LoadSample" class="btn-ui btn-accent">
+            <span>Load 12M FY Sample</span>
+          </button>
+        </div>
+
+        <div class="g9-config-bar">
+          <div class="form-group" style="margin-bottom:0;">
+            <label for="g9Fy">Financial Year:</label>
+            <select id="g9Fy" class="form-select">
+              <option value="2025-26" selected>FY 2025-26</option>
+              <option value="2024-25">FY 2024-25</option>
+              <option value="2026-27">FY 2026-27</option>
+              <option value="2023-24">FY 2023-24</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label for="g9CutoffMonth">Sec 16(4) Cut-Off Window:</label>
+            <select id="g9CutoffMonth" class="form-select">
+              <option value="11" selected>Apr - Nov 30 (Next FY)</option>
+              <option value="10">Apr - Oct 31 (Next FY)</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label for="g9TurnoverSlab">Annual Turnover Slab (HSN Rule):</label>
+            <select id="g9TurnoverSlab" class="form-select">
+              <option value="true" selected>Above Rs. 5 Cr (6-Digit HSN Required)</option>
+              <option value="false">Up to Rs. 5 Cr (4-Digit HSN Required)</option>
+            </select>
+          </div>
+          <div>
+            <button type="button" id="btnG9Run" class="btn-ui btn-primary" style="width:100%;">
+              <span>Run GSTR-9 Engine</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="g9-upload-grid">
+          <!-- Left Column: Outward Supplies & GSTR-3B -->
+          <div class="g9-panel-box">
+            <div class="g9-panel-title">Outward Supplies &amp; GSTR-3B Summary</div>
+            <div class="g9-panel-sub">Upload full-year Sales Register, GSTR-1 (.xlsx / .zip / .json), and GSTR-3B — or enter key 3B totals directly.</div>
+
+            <div class="g9-file-row" id="g9RowSales">
+              <input type="file" id="g9FileSales" accept=".xlsx,.xls,.csv,.zip,.json" multiple hidden>
+              <div class="g9-file-meta">
+                <strong>Sales Register (Tally / ERP)</strong>
+                <span id="g9LabelSales">No Sales Register attached</span>
+              </div>
+              <button type="button" class="btn-portal-trigger" onclick="document.getElementById('g9FileSales').click();">Select Files</button>
+            </div>
+
+            <div class="g9-file-row" id="g9RowGstr1">
+              <input type="file" id="g9FileGstr1" accept=".xlsx,.xls,.csv,.zip,.json" multiple hidden>
+              <div class="g9-file-meta">
+                <strong>GSTR-1 Annual / Monthly Export</strong>
+                <span id="g9LabelGstr1">No GSTR-1 export attached</span>
+              </div>
+              <button type="button" class="btn-portal-trigger" onclick="document.getElementById('g9FileGstr1').click();">Select Files</button>
+            </div>
+
+            <div class="g9-file-row" id="g9RowGstr3B">
+              <input type="file" id="g9FileGstr3B" accept=".xlsx,.xls,.csv,.zip,.json" multiple hidden>
+              <div class="g9-file-meta">
+                <strong>GSTR-3B Filed Summary (Optional File)</strong>
+                <span id="g9LabelGstr3B">No GSTR-3B file attached (or use inputs below)</span>
+              </div>
+              <button type="button" class="btn-portal-trigger" onclick="document.getElementById('g9FileGstr3B').click();">Select Files</button>
+            </div>
+
+            <div style="font-size:0.74rem; font-weight:700; color:var(--text-secondary); margin-top:10px;">
+              Manual GSTR-3B &amp; Interest Overrides (Optional / Quick Edit)
+            </div>
+            <div class="g9-3b-mini-grid">
+              <div class="g9-mini-field">
+                <label for="g9_3b_outward_taxable">3.1(a) Outward Taxable</label>
+                <input type="number" id="g9_3b_outward_taxable" step="0.01" placeholder="Auto / 0.00">
+              </div>
+              <div class="g9-mini-field">
+                <label for="g9_3b_outward_tax">3.1(a) Outward Tax</label>
+                <input type="number" id="g9_3b_outward_tax" step="0.01" placeholder="Auto / 0.00">
+              </div>
+              <div class="g9-mini-field">
+                <label for="g9_3b_itc_4a5">3B Table 4A(5) ITC</label>
+                <input type="number" id="g9_3b_itc_4a5" step="0.01" placeholder="Auto / 0.00">
+              </div>
+              <div class="g9-mini-field">
+                <label for="g9_3b_cash_paid">6.1 Cash Tax Paid</label>
+                <input type="number" id="g9_3b_cash_paid" step="0.01" placeholder="0.00">
+              </div>
+              <div class="g9-mini-field">
+                <label for="g9_3b_itc_paid">6.1 ITC Utilized</label>
+                <input type="number" id="g9_3b_itc_paid" step="0.01" placeholder="0.00">
+              </div>
+              <div class="g9-mini-field">
+                <label for="g9_3b_interest_fee">Portal Int. + Late Fee</label>
+                <input type="number" id="g9_3b_interest_fee" step="0.01" placeholder="0.00">
+              </div>
+              <div class="g9-mini-field">
+                <label for="g9_books_interest_fee">Books Int. + Late Fee</label>
+                <input type="number" id="g9_books_interest_fee" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Inward Supplies & Statutory Rules -->
+          <div class="g9-panel-box">
+            <div class="g9-panel-title">Inward Supplies &amp; Statutory Rule Flags</div>
+            <div class="g9-panel-sub">Upload 12M Purchase Register &amp; Consolidated GSTR-2B (with Apr-Nov cutoff) and configure Sec 17(5), Rule 37, and Rule 42/43.</div>
+
+            <div class="g9-file-row" id="g9RowPurchase">
+              <input type="file" id="g9FilePurchase" accept=".xlsx,.xls,.csv,.zip,.json" multiple hidden>
+              <div class="g9-file-meta">
+                <strong>Purchase Register (12M Books)</strong>
+                <span id="g9LabelPurchase">No Purchase Register attached</span>
+              </div>
+              <button type="button" class="btn-portal-trigger" onclick="document.getElementById('g9FilePurchase').click();">Select Files</button>
+            </div>
+
+            <div class="g9-file-row" id="g9Row2B">
+              <input type="file" id="g9File2B" accept=".xlsx,.xls,.csv,.zip,.json" multiple hidden>
+              <div class="g9-file-meta">
+                <strong>Consolidated GSTR-2B (12M + Cutoff)</strong>
+                <span id="g9Label2B">No GSTR-2B statement attached</span>
+              </div>
+              <button type="button" class="btn-portal-trigger" onclick="document.getElementById('g9File2B').click();">Select Files</button>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+              <button type="button" id="btnG9ReuseActive" class="btn-tally-trigger">
+                <span>Reuse Active 2B &amp; Books Files</span>
+              </button>
+              <span id="g9ReuseStatus" style="font-size:0.74rem; color:var(--text-secondary);"></span>
+            </div>
+
+            <div style="font-size:0.74rem; font-weight:700; color:var(--text-secondary); margin-top:6px;">
+              Rule 37 / Rule 42 / Rule 43 Adjustments (Auto-computed from ledger tags unless overridden)
+            </div>
+            <div class="g9-3b-mini-grid">
+              <div class="g9-mini-field">
+                <label for="g9_rule37_tax">Rule 37 (&gt;180d) Tax</label>
+                <input type="number" id="g9_rule37_tax" step="0.01" placeholder="Auto from ledger">
+              </div>
+              <div class="g9-mini-field">
+                <label for="g9_rule42_pct">Rule 42 Exempt Ratio (%)</label>
+                <input type="number" id="g9_rule42_pct" step="0.01" min="0" max="100" placeholder="Auto from Sales">
+              </div>
+              <div class="g9-mini-field">
+                <label for="g9_rule43_tax">Rule 43 Capex Reversal</label>
+                <input type="number" id="g9_rule43_tax" step="0.01" placeholder="0.00">
+              </div>
+              <div class="g9-mini-field">
+                <label for="g9_reclaimed_6h">Reclaimed Rule 37 (6H)</label>
+                <input type="number" id="g9_reclaimed_6h" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- GSTR-9 LOADER -->
+      <div id="g9LoadingIndicator" class="reconcile-loader">
+        <div class="loader-pulse"></div>
+        <div class="loader-title" id="g9LoadingText">Computing Statutory GSTR-9 Tables 4-18...</div>
+        <div class="loader-sub">Aggregating outward turnover, running annual ITC bridge, Rule 42/37 reversals, and HSN validation.</div>
+      </div>
+
+      <!-- GSTR-9 RESULTS -->
+      <div id="g9ResultsSection" style="display: none;">
+        <div class="kpi-cluster">
+          <div class="metric-card card-theme-books">
+            <div class="metric-top">
+              <span class="metric-label">Turnover Variance (Books vs 1)</span>
+            </div>
+            <div class="metric-amount" id="g9KpiTurnoverVar">₹0.00</div>
+            <div class="metric-footer" id="g9KpiTurnoverSub">Books: ₹0.00 | GSTR-1: ₹0.00</div>
+          </div>
+
+          <div class="metric-card card-theme-matched">
+            <div class="metric-top">
+              <span class="metric-label">Net Eligible ITC (Table 7J)</span>
+            </div>
+            <div class="metric-amount" id="g9KpiNetItc">₹0.00</div>
+            <div class="metric-footer" id="g9KpiNetItcSub">Table 6O: ₹0.00 | Reversed 7I: ₹0.00</div>
+          </div>
+
+          <div class="metric-card card-theme-unbooked">
+            <div class="metric-top">
+              <span class="metric-label">Table 8D Variance (2B - 8B - 8C)</span>
+            </div>
+            <div class="metric-amount" id="g9Kpi8dDiff">₹0.00</div>
+            <div class="metric-footer" id="g9Kpi8dSub">Table 8A: ₹0.00 | Next-FY 8C: ₹0.00</div>
+          </div>
+
+          <div class="metric-card card-theme-risk">
+            <div class="metric-top">
+              <span class="metric-label">Tax Shortfall / Excess (Table 9)</span>
+            </div>
+            <div class="metric-amount" id="g9KpiTaxShortfall">₹0.00</div>
+            <div class="metric-footer" id="g9KpiTaxSub">Payable: ₹0.00 | Paid: ₹0.00</div>
+          </div>
+
+          <div class="metric-card card-theme-portal">
+            <div class="metric-top">
+              <span class="metric-label">HSN Audit Warnings (17 &amp; 18)</span>
+            </div>
+            <div class="metric-amount" id="g9KpiHsnErrors">0</div>
+            <div class="metric-footer" id="g9KpiHsnSub">4/6-digit &amp; effective rate checks</div>
+          </div>
+        </div>
+
+        <div id="g9AuditAlerts" style="margin-bottom: 18px;"></div>
+
+        <section class="recon-vault-card">
+          <div class="vault-header-bar">
+            <div>
+              <h3 id="g9VaultTitle" style="font-size:0.98rem; font-weight:700; color:var(--text-primary);">Statutory Working Paper Preview</h3>
+              <p id="g9VaultSubtitle" style="font-size:0.78rem; color:var(--text-secondary);">FY 2025-26 | Cut-off: Apr - Nov 30</p>
+            </div>
+            <button type="button" id="btnG9ExportExcel" class="btn-ui btn-export">
+              <span>Export GSTR-9 Working Paper (.xlsx)</span>
+            </button>
+          </div>
+
+          <div class="segmented-tabs-wrapper">
+            <div class="segmented-tabs">
+              <button type="button" class="tab-pill g9-subtab active" data-g9tab="outward">Tables 4 &amp; 5 (Outward)</button>
+              <button type="button" class="tab-pill g9-subtab" data-g9tab="itc">Tables 6, 7 &amp; 8 (ITC Bridge)</button>
+              <button type="button" class="tab-pill g9-subtab" data-g9tab="tax">Tables 9 &amp; 10-14 (Tax &amp; Cutoff)</button>
+              <button type="button" class="tab-pill g9-subtab" data-g9tab="hsn">Tables 17 &amp; 18 (HSN Summary)</button>
+              <button type="button" class="tab-pill g9-subtab" data-g9tab="drilldown">Reversals &amp; Table 8D Drilldown</button>
+            </div>
+          </div>
+
+          <div id="g9TableContainer" class="table-viewport"></div>
+        </section>
+      </div>
+    </div><!-- /#workspaceGstr9 -->
 
   </main>
 
@@ -2179,6 +2620,6 @@
     <p>TallyWalls-GST Intelligence &amp; Reconciliation Hub &bull; Statutory Compliance Framework &bull; Indian Enterprise Edition</p>
   </footer>
 
-  <script src="/static/js/app.js?v=2.9.0"></script>
+  <script src="/static/js/app.js?v=3.0.0"></script>
 </body>
 </html>

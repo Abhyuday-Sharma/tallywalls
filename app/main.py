@@ -14,6 +14,7 @@ for _d in [_PARENT_DIR, _CURRENT_DIR]:
     if _d not in sys.path:
         sys.path.insert(0, _d)
 
+import gzip
 import json
 import asyncio
 from typing import Optional, List
@@ -27,6 +28,15 @@ import pandas as pd
 from app.engine.column_mapper import detect_columns
 from app.engine.reconciler import run_reconciliation
 from app.engine.excel_exporter import export_reconciliation_excel
+from app.engine.gstr9_parsers import (
+    extract_generic_files_to_df,
+    parse_gstr1_files,
+    parse_gstr3b_inputs,
+    parse_sales_register_df,
+)
+from app.engine.gstr9_engine import compute_gstr9_return
+from app.engine.gstr9_exporter import export_gstr9_excel
+from app.engine.gstr9_sample import run_sample_gstr9_fy2526
 from app.engine.portal_bridge import (
     save_credentials, load_credentials, get_public_profile,
     parse_gstr2b_json, execute_portal_bridge_sync, simulate_portal_download,
@@ -877,6 +887,107 @@ async def sync_purchase_register_from_tally(req: TallySyncRequest):
             status_code=500,
             detail=f"Tally synchronization failed: {str(e)}"
         )
+
+
+async def _read_optional_uploads(files: Optional[List[UploadFile]]) -> List[tuple]:
+    """Read optional multipart UploadFiles, transparently decompressing .gz payloads."""
+    out = []
+    for f in files or []:
+        if not f or not f.filename:
+            continue
+        raw = await f.read()
+        if not raw:
+            continue
+        fname = f.filename
+        if fname.lower().endswith(".gz"):
+            raw = gzip.decompress(raw)
+            fname = fname[:-3]
+        out.append((raw, fname))
+    return out
+
+
+# -------------------------------------------------------------
+# GSTR-9 Annual Return Hub Endpoints
+# -------------------------------------------------------------
+
+@app.post("/api/gstr9/compute")
+async def compute_gstr9_endpoint(
+    sales_files: Optional[List[UploadFile]] = File(default=[]),
+    gstr1_files: Optional[List[UploadFile]] = File(default=[]),
+    gstr3b_files: Optional[List[UploadFile]] = File(default=[]),
+    purchase_files: Optional[List[UploadFile]] = File(default=[]),
+    gstr2b_files: Optional[List[UploadFile]] = File(default=[]),
+    config_json: str = Form("{}"),
+):
+    """
+    Compute full-year GSTR-9 statutory Tables 4-18 & GSTR-9C tie-out.
+    Supports incremental partial uploads (Outward-only, Inward-only, or Complete FY)
+    plus manual GSTR-3B / Rule 37 / Rule 42 / Sec 17(5) overrides in config_json.
+    """
+    try:
+        cfg = json.loads(config_json or "{}")
+    except Exception:
+        cfg = {}
+
+    fy = str(cfg.get("fy") or "2025-26")
+    cutoff_month = int(cfg.get("cutoff_month") or 11)
+    turnover_above_5cr = bool(cfg.get("turnover_above_5cr", True))
+    overrides = cfg.get("manual_overrides") or {}
+
+    s_tuples = await _read_optional_uploads(sales_files)
+    g1_tuples = await _read_optional_uploads(gstr1_files)
+    g3b_tuples = await _read_optional_uploads(gstr3b_files)
+    pur_tuples = await _read_optional_uploads(purchase_files)
+    g2b_tuples = await _read_optional_uploads(gstr2b_files)
+
+    raw_sales = extract_generic_files_to_df(s_tuples, is_portal_2b=False) if s_tuples else pd.DataFrame()
+    sales_df = parse_sales_register_df(raw_sales, fy=fy, cutoff_month=cutoff_month) if not raw_sales.empty else pd.DataFrame()
+
+    g1_df, g1_hsn_df = parse_gstr1_files(g1_tuples, fy=fy, cutoff_month=cutoff_month) if g1_tuples else (pd.DataFrame(), pd.DataFrame())
+    g3b_data = parse_gstr3b_inputs(g3b_tuples, manual_overrides=overrides)
+    pur_df = extract_generic_files_to_df(pur_tuples, is_portal_2b=False) if pur_tuples else pd.DataFrame()
+    g2b_df = extract_generic_files_to_df(g2b_tuples, is_portal_2b=True) if g2b_tuples else pd.DataFrame()
+
+    if sales_df.empty and g1_df.empty and pur_df.empty and g2b_df.empty and not overrides.get("gstr3b"):
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload at least one statutory statement (Sales Register, GSTR-1, GSTR-3B, Purchase Register, or GSTR-2B) or enter GSTR-3B figures."
+        )
+
+    result = compute_gstr9_return(
+        fy=fy,
+        turnover_above_5cr=turnover_above_5cr,
+        cutoff_month=cutoff_month,
+        sales_df=sales_df,
+        gstr1_df=g1_df,
+        gstr1_hsn_df=g1_hsn_df,
+        gstr3b_data=g3b_data,
+        raw_books_purchase_df=pur_df,
+        raw_2b_df=g2b_df,
+        manual_overrides=overrides,
+    )
+    return result
+
+
+@app.get("/api/gstr9/sample")
+async def load_sample_gstr9(fy: str = "2025-26", turnover_above_5cr: bool = True, cutoff_month: int = 11):
+    """Run and return a complete 12-month FY 2025-26 GSTR-9 sample calculation."""
+    return run_sample_gstr9_fy2526(turnover_above_5cr=turnover_above_5cr, cutoff_month=cutoff_month)
+
+
+@app.post("/api/gstr9/export")
+async def export_gstr9_working_paper(data: dict):
+    """Stream the 8-sheet CA-ready GSTR-9 Working Paper (.xlsx)."""
+    try:
+        fy = (data.get("summary") or {}).get("financial_year", "2025-26").replace("/", "-")
+        excel_stream = export_gstr9_excel(data)
+        headers = {
+            "Content-Disposition": f"attachment; filename=TallyWalls_GSTR9_Working_Paper_FY{fy}.xlsx",
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }
+        return StreamingResponse(excel_stream, headers=headers)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GSTR-9 Excel export failed: {str(e)}")
 
 
 @app.get("/api/health")

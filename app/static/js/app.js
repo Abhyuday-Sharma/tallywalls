@@ -54,6 +54,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupDragAndDrop();
   initFinancialYears();
   setupEventListeners();
+  setupGstr9HubListeners();
   await detectEnvironment();
 });
 
@@ -1749,5 +1750,738 @@ async function handleExportExcel() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = origText;
+  }
+}
+
+// -------------------------------------------------------------
+// GSTR-9 Annual Return Hub (v3.0)
+// -------------------------------------------------------------
+
+let currentWorkspace = "recon";
+let currentGstr9Data = null;
+let currentGstr9SubTab = "outward";
+
+function switchWorkspace(ws) {
+  currentWorkspace = ws === "gstr9" ? "gstr9" : "recon";
+  const tabRecon = document.getElementById("wsTabRecon");
+  const tabGstr9 = document.getElementById("wsTabGstr9");
+  const viewRecon = document.getElementById("workspaceRecon");
+  const viewGstr9 = document.getElementById("workspaceGstr9");
+
+  if (tabRecon) {
+    tabRecon.classList.toggle("active", currentWorkspace === "recon");
+    tabRecon.setAttribute("aria-selected", String(currentWorkspace === "recon"));
+  }
+  if (tabGstr9) {
+    tabGstr9.classList.toggle("active", currentWorkspace === "gstr9");
+    tabGstr9.setAttribute("aria-selected", String(currentWorkspace === "gstr9"));
+  }
+  if (viewRecon) viewRecon.style.display = currentWorkspace === "recon" ? "block" : "none";
+  if (viewGstr9) viewGstr9.style.display = currentWorkspace === "gstr9" ? "block" : "none";
+}
+
+function updateG9FileRowUI(inputId, labelId, rowId, emptyText) {
+  const inp = document.getElementById(inputId);
+  const lbl = document.getElementById(labelId);
+  const row = document.getElementById(rowId);
+  if (!inp || !lbl || !row) return;
+  if (inp.files && inp.files.length > 0) {
+    let totalBytes = 0;
+    const names = [];
+    for (let i = 0; i < inp.files.length; i++) {
+      totalBytes += inp.files[i].size || 0;
+      names.push(inp.files[i].name);
+    }
+    const kb = (totalBytes / 1024).toFixed(1);
+    lbl.textContent = inp.files.length === 1
+      ? `Attached: ${names[0]} (${kb} KB)`
+      : `Attached: ${inp.files.length} files (${kb} KB total)`;
+    lbl.style.color = "#059669";
+    row.classList.add("has-file");
+  } else {
+    lbl.textContent = emptyText;
+    lbl.style.color = "";
+    row.classList.remove("has-file");
+  }
+}
+
+function setupGstr9HubListeners() {
+  const fileConfigs = [
+    ["g9FileSales", "g9LabelSales", "g9RowSales", "No Sales Register attached"],
+    ["g9FileGstr1", "g9LabelGstr1", "g9RowGstr1", "No GSTR-1 export attached"],
+    ["g9FileGstr3B", "g9LabelGstr3B", "g9RowGstr3B", "No GSTR-3B file attached (or use inputs below)"],
+    ["g9FilePurchase", "g9LabelPurchase", "g9RowPurchase", "No Purchase Register attached"],
+    ["g9File2B", "g9Label2B", "g9Row2B", "No GSTR-2B statement attached"],
+  ];
+
+  fileConfigs.forEach(([inId, lblId, rowId, emptyText]) => {
+    const inp = document.getElementById(inId);
+    if (inp) {
+      inp.addEventListener("change", () => updateG9FileRowUI(inId, lblId, rowId, emptyText));
+    }
+  });
+
+  const btnSample = document.getElementById("btnG9LoadSample");
+  if (btnSample) btnSample.addEventListener("click", handleGstr9Sample);
+
+  const btnRun = document.getElementById("btnG9Run");
+  if (btnRun) btnRun.addEventListener("click", handleGstr9Compute);
+
+  const btnReuse = document.getElementById("btnG9ReuseActive");
+  if (btnReuse) btnReuse.addEventListener("click", reuseActiveReconFilesForGstr9);
+
+  const btnExport = document.getElementById("btnG9ExportExcel");
+  if (btnExport) btnExport.addEventListener("click", handleGstr9Export);
+
+  document.querySelectorAll(".g9-subtab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".g9-subtab").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentGstr9SubTab = btn.getAttribute("data-g9tab") || "outward";
+      renderGstr9Table();
+    });
+  });
+}
+
+function reuseActiveReconFilesForGstr9() {
+  const src2B = document.getElementById("file2B");
+  const srcBooks = document.getElementById("fileBooks");
+  const dst2B = document.getElementById("g9File2B");
+  const dstPur = document.getElementById("g9FilePurchase");
+  const statusEl = document.getElementById("g9ReuseStatus");
+
+  let copied = 0;
+  try {
+    if (src2B && src2B.files && src2B.files.length > 0 && dst2B) {
+      const dt2b = new DataTransfer();
+      for (let i = 0; i < src2B.files.length; i++) dt2b.items.add(src2B.files[i]);
+      dst2B.files = dt2b.files;
+      updateG9FileRowUI("g9File2B", "g9Label2B", "g9Row2B", "No GSTR-2B statement attached");
+      copied += src2B.files.length;
+    }
+    if (srcBooks && srcBooks.files && srcBooks.files.length > 0 && dstPur) {
+      const dtBk = new DataTransfer();
+      for (let i = 0; i < srcBooks.files.length; i++) dtBk.items.add(srcBooks.files[i]);
+      dstPur.files = dtBk.files;
+      updateG9FileRowUI("g9FilePurchase", "g9LabelPurchase", "g9RowPurchase", "No Purchase Register attached");
+      copied += srcBooks.files.length;
+    }
+  } catch (e) {
+    console.warn("Reuse files note:", e);
+  }
+
+  if (statusEl) {
+    if (copied > 0) {
+      statusEl.style.color = "#059669";
+      statusEl.textContent = `Copied ${copied} active file(s) from Reconciliation tab.`;
+    } else {
+      statusEl.style.color = "#b45309";
+      statusEl.textContent = "Attach GSTR-2B or Purchase Register in the first tab to reuse them here.";
+    }
+  }
+}
+
+async function _maybeGzipUpload(file) {
+  if (!file) return file;
+  const name = (file.name || "").toLowerCase();
+  if (name.endsWith(".gz") || name.endsWith(".zip")) return file;
+  if (file.size < 1.2 * 1024 * 1024 || typeof CompressionStream === "undefined") {
+    return file;
+  }
+  try {
+    const compressedStream = file.stream().pipeThrough(new CompressionStream("gzip"));
+    const compressedBlob = await new Response(compressedStream).blob();
+    if (compressedBlob.size < file.size) {
+      return new File([compressedBlob], `${file.name}.gz`, { type: "application/gzip" });
+    }
+  } catch (err) {
+    console.warn("Gzip pre-compression skipped:", err);
+  }
+  return file;
+}
+
+function _numInputVal(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const raw = String(el.value || "").trim();
+  if (raw === "") return null;
+  const n = parseFloat(raw);
+  return isNaN(n) ? null : n;
+}
+
+function buildGstr9ConfigPayload() {
+  const fy = (document.getElementById("g9Fy") || {}).value || "2025-26";
+  const cutoffMonth = parseInt((document.getElementById("g9CutoffMonth") || {}).value || "11", 10) || 11;
+  const slabRaw = (document.getElementById("g9TurnoverSlab") || {}).value || "true";
+  const turnoverAbove5Cr = slabRaw === "true";
+
+  const overrides = {};
+  const g3bOverride = {};
+
+  const outTx = _numInputVal("g9_3b_outward_taxable");
+  const outTax = _numInputVal("g9_3b_outward_tax");
+  if (outTx !== null || outTax !== null) {
+    g3bOverride.outward_3_1 = {
+      a_taxable: {
+        taxable: outTx !== null ? outTx : 0.0,
+        igst: outTax !== null ? outTax : 0.0,
+        cgst: 0.0,
+        sgst: 0.0,
+        cess: 0.0,
+      }
+    };
+  }
+
+  const itc4a5 = _numInputVal("g9_3b_itc_4a5");
+  if (itc4a5 !== null) {
+    g3bOverride.itc_4 = {
+      "4A_5_all_other": { igst: itc4a5, cgst: 0.0, sgst: 0.0, cess: 0.0 }
+    };
+  }
+
+  const cashPaid = _numInputVal("g9_3b_cash_paid");
+  const itcPaid = _numInputVal("g9_3b_itc_paid");
+  const portalInt = _numInputVal("g9_3b_interest_fee");
+  if (cashPaid !== null || itcPaid !== null || portalInt !== null) {
+    const tp = {};
+    if (cashPaid !== null) tp.cash_paid = { igst: cashPaid, cgst: 0.0, sgst: 0.0, cess: 0.0 };
+    if (itcPaid !== null) tp.itc_utilized = { igst: itcPaid, cgst: 0.0, sgst: 0.0, cess: 0.0 };
+    if (portalInt !== null) {
+      tp.interest_paid = portalInt;
+      tp.late_fee_paid = 0.0;
+    }
+    g3bOverride.tax_paid_6_1 = tp;
+  }
+
+  if (Object.keys(g3bOverride).length > 0) {
+    overrides.gstr3b = g3bOverride;
+  }
+
+  const booksInt = _numInputVal("g9_books_interest_fee");
+  if (booksInt !== null) overrides.books_interest = booksInt;
+
+  const r37 = _numInputVal("g9_rule37_tax");
+  if (r37 !== null) overrides.rule37 = { igst: r37, cgst: 0.0, sgst: 0.0, cess: 0.0 };
+
+  const r42Pct = _numInputVal("g9_rule42_pct");
+  if (r42Pct !== null) overrides.rule42_exempt_ratio = Math.max(0.0, Math.min(1.0, r42Pct / 100.0));
+
+  const r43 = _numInputVal("g9_rule43_tax");
+  if (r43 !== null) overrides.rule43 = { igst: r43, cgst: 0.0, sgst: 0.0, cess: 0.0 };
+
+  const rec6h = _numInputVal("g9_reclaimed_6h");
+  if (rec6h !== null) overrides.reclaimed_rule37 = { igst: rec6h, cgst: 0.0, sgst: 0.0, cess: 0.0 };
+
+  return {
+    fy,
+    cutoff_month: cutoffMonth,
+    turnover_above_5cr: turnoverAbove5Cr,
+    manual_overrides: overrides,
+  };
+}
+
+function setGstr9Loading(isLoading, msg = "Computing Statutory GSTR-9 Tables 4-18...") {
+  const el = document.getElementById("g9LoadingIndicator");
+  const txt = document.getElementById("g9LoadingText");
+  if (txt && msg) txt.textContent = msg;
+  if (el) el.style.display = isLoading ? "block" : "none";
+}
+
+async function handleGstr9Sample() {
+  const btn = document.getElementById("btnG9LoadSample");
+  const orig = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>Loading FY 2025-26 Sample...</span>";
+  }
+  setGstr9Loading(true, "Computing 12-Month FY 2025-26 Enterprise GSTR-9 Sample...");
+
+  try {
+    const fy = (document.getElementById("g9Fy") || {}).value || "2025-26";
+    const cutoff = (document.getElementById("g9CutoffMonth") || {}).value || "11";
+    const slab = (document.getElementById("g9TurnoverSlab") || {}).value || "true";
+    const url = `/api/gstr9/sample?fy=${encodeURIComponent(fy)}&cutoff_month=${encodeURIComponent(cutoff)}&turnover_above_5cr=${encodeURIComponent(slab)}`;
+    currentGstr9Data = await safeFetchJSON(url);
+    renderGstr9Dashboard(currentGstr9Data);
+  } catch (err) {
+    alert("GSTR-9 Sample Error: " + err.message);
+  } finally {
+    setGstr9Loading(false);
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+  }
+}
+
+async function handleGstr9Compute() {
+  const btn = document.getElementById("btnG9Run");
+  const orig = btn ? btn.innerHTML : "";
+  const cfg = buildGstr9ConfigPayload();
+
+  const fileFields = [
+    ["g9FileSales", "sales_files"],
+    ["g9FileGstr1", "gstr1_files"],
+    ["g9FileGstr3B", "gstr3b_files"],
+    ["g9FilePurchase", "purchase_files"],
+    ["g9File2B", "gstr2b_files"],
+  ];
+
+  const formData = new FormData();
+  let attachedCount = 0;
+  let totalPayloadBytes = 0;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>Computing GSTR-9...</span>";
+  }
+  setGstr9Loading(true, "Normalizing 12-Month Registers & Computing Tables 4-18...");
+
+  try {
+    for (const [inpId, fieldName] of fileFields) {
+      const inp = document.getElementById(inpId);
+      if (inp && inp.files && inp.files.length > 0) {
+        for (let i = 0; i < inp.files.length; i++) {
+          const uploadFile = await _maybeGzipUpload(inp.files[i]);
+          totalPayloadBytes += uploadFile.size || 0;
+          formData.append(fieldName, uploadFile);
+          attachedCount++;
+        }
+      }
+    }
+
+    if (attachedCount === 0 && !cfg.manual_overrides.gstr3b) {
+      throw new Error("Please upload at least one register (Sales, GSTR-1, GSTR-3B, Purchase, or GSTR-2B) or enter GSTR-3B figures, or click Load 12M FY Sample.");
+    }
+
+    if (bridgeState.isCloudBackend && totalPayloadBytes > 4.2 * 1024 * 1024) {
+      const mb = (totalPayloadBytes / (1024 * 1024)).toFixed(2);
+      throw new Error(`Compressed upload size (${mb} MB) exceeds the 4.5 MB cloud web limit. Please split into fewer files or use the offline desktop app.`);
+    }
+
+    formData.append("config_json", JSON.stringify(cfg));
+    currentGstr9Data = await safeFetchJSON("/api/gstr9/compute", {
+      method: "POST",
+      body: formData,
+    });
+    renderGstr9Dashboard(currentGstr9Data);
+  } catch (err) {
+    alert("GSTR-9 Computation Notice: " + err.message);
+  } finally {
+    setGstr9Loading(false);
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+  }
+}
+
+function renderGstr9Dashboard(data) {
+  if (!data || !data.summary) return;
+  const s = data.summary;
+
+  setText("g9KpiTurnoverVar", formatINR(s.turnover_variance || 0));
+  setText("g9KpiTurnoverSub", `Books: ${formatINR(s.books_turnover || 0)} | 1: ${formatINR(s.gstr1_turnover || 0)}`);
+
+  setText("g9KpiNetItc", formatINR(s.table_7j_net_itc || 0));
+  setText("g9KpiNetItcSub", `6O: ${formatINR(s.table_6o_gross_itc || 0)} | Rev 7I: ${formatINR(s.table_7i_reversals || 0)}`);
+
+  setText("g9Kpi8dDiff", formatINR(s.table_8d_diff_itc || 0));
+  setText("g9Kpi8dSub", `2B 8A: ${formatINR(s.table_8a_2b_itc || 0)} | 8C: ${formatINR(s.table_8c_next_fy_itc || 0)}`);
+
+  setText("g9KpiTaxShortfall", formatINR(s.tax_shortfall_excess || 0));
+  setText("g9KpiTaxSub", `Payable: ${formatINR(s.tax_payable_total || 0)} | Paid: ${formatINR(s.tax_paid_total || 0)}`);
+
+  setText("g9KpiHsnErrors", String(s.hsn_total_errors || 0));
+  setText("g9KpiHsnSub", `${s.reversals_count || 0} Reversal Items | ${s.drilldown_count || 0} 8D Items`);
+
+  setText("g9VaultTitle", `GSTR-9 Statutory Schedules (FY ${s.financial_year || "2025-26"})`);
+  setText(
+    "g9VaultSubtitle",
+    `Cut-off: ${s.cutoff_window || "Apr - Nov 30"} | HSN Rule: ${s.turnover_above_5cr ? "> Rs. 5 Cr (6-digit)" : "<= Rs. 5 Cr (4-digit)"} | Rule 42 Exempt Ratio: ${s.rule_42_exempt_ratio_pct || 0}%`
+  );
+
+  // Audit Alerts & GSTR-9C Tie-out Banner
+  const alertsEl = document.getElementById("g9AuditAlerts");
+  if (alertsEl) {
+    const g9c = data.gstr9c_bridge || {};
+    const t5 = g9c.table_5_turnover || {};
+    const t12 = g9c.table_12_itc || {};
+    const r88Style = s.rule88a_warning
+      ? "background:#fffbeb; border:1px solid #fcd34d; color:#92400e;"
+      : "background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46;";
+    const intDiff = Number(s.interest_late_fee_diff || 0);
+    const intHtml = Math.abs(intDiff) > 0.01
+      ? `<span class="g9-badge-warn">Books vs Portal Int/Late Fee Diff: ${formatINR(intDiff)}</span>`
+      : `<span class="g9-badge-ok">Interest & Late Fee Reconciled</span>`;
+
+    alertsEl.innerHTML = `
+      <div style="${r88Style} border-radius:10px; padding:12px 16px; font-size:0.8rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <strong>Audit &amp; Rule 88A Status:</strong> ${escHtml(s.rule88a_message || "")}
+          <div style="margin-top:4px; font-size:0.75rem; opacity:0.9;">
+            <strong>GSTR-9C Tie-Out:</strong> Table 5 Turnover Unreconciled Diff: ${formatINR(t5.unreconciled_turnover_diff || 0)} &bull; Table 12 ITC Unreconciled Diff: ${formatINR(t12.unreconciled_itc_diff || 0)}
+          </div>
+        </div>
+        <div>${intHtml}</div>
+      </div>
+    `;
+  }
+
+  const resSec = document.getElementById("g9ResultsSection");
+  if (resSec) {
+    resSec.style.display = "block";
+    try { resSec.scrollIntoView({ behavior: "smooth" }); } catch (_) {}
+  }
+
+  renderGstr9Table();
+}
+
+function renderGstr9Table() {
+  const box = document.getElementById("g9TableContainer");
+  if (!box || !currentGstr9Data || !currentGstr9Data.tables) return;
+  const t = currentGstr9Data.tables;
+
+  if (currentGstr9SubTab === "outward") {
+    const t4 = t.table_4 || [];
+    const t5 = t.table_5 || [];
+    const renderT4Rows = (rows) => rows.map(r => {
+      const cls = r.is_total ? "g9-table-total" : "";
+      const bk = r.books || {};
+      const g1 = r.gstr1 || {};
+      const g9 = r.gstr9 || {};
+      const bkTax = r.books_tax !== undefined ? r.books_tax : (Number(bk.igst || 0) + Number(bk.cgst || 0) + Number(bk.sgst || 0) + Number(bk.cess || 0));
+      const g1Tax = r.gstr1_tax !== undefined ? r.gstr1_tax : (Number(g1.igst || 0) + Number(g1.cgst || 0) + Number(g1.sgst || 0) + Number(g1.cess || 0));
+      const g9Tax = r.gstr9_tax !== undefined ? r.gstr9_tax : (Number(g9.igst || 0) + Number(g9.cgst || 0) + Number(g9.sgst || 0) + Number(g9.cess || 0));
+      const bkTx = r.books_taxable !== undefined ? r.books_taxable : bk.taxable;
+      const g1Tx = r.gstr1_taxable !== undefined ? r.gstr1_taxable : g1.taxable;
+      const g9Tx = r.gstr9_taxable !== undefined ? r.gstr9_taxable : g9.taxable;
+      const varTx = r.variance_books_vs_gstr1 !== undefined ? r.variance_books_vs_gstr1 : (Number(bkTx || 0) - Number(g1Tx || 0));
+      return `
+        <tr class="${cls}">
+          <td><strong>${escHtml(r.code)}</strong></td>
+          <td>${escHtml(r.desc)}</td>
+          <td class="num-cell">${formatINR(bkTx)}</td>
+          <td class="num-cell">${formatINR(bkTax)}</td>
+          <td class="num-cell">${formatINR(g1Tx)}</td>
+          <td class="num-cell">${formatINR(g1Tax)}</td>
+          <td class="num-cell">${formatINR(g9Tx)}</td>
+          <td class="num-cell">${formatINR(g9Tax)}</td>
+          <td class="num-cell"><strong>${formatINR(varTx)}</strong></td>
+        </tr>
+      `;
+    }).join("");
+
+    const renderT5Rows = (rows) => rows.map(r => {
+      const cls = (r.is_total || r.is_subtotal) ? "g9-table-total" : "";
+      const diff = Number(r.books_taxable || 0) - Number(r.gstr1_taxable || 0);
+      return `
+        <tr class="${cls}">
+          <td><strong>${escHtml(r.code)}</strong></td>
+          <td>${escHtml(r.desc)}</td>
+          <td class="num-cell">${formatINR(r.books_taxable)}</td>
+          <td class="num-cell">${formatINR(r.gstr1_taxable)}</td>
+          <td class="num-cell">${formatINR(r.gstr3b_taxable)}</td>
+          <td class="num-cell"><strong>${formatINR(diff)}</strong></td>
+        </tr>
+      `;
+    }).join("");
+
+    box.innerHTML = `
+      <table class="ledger-table">
+        <thead>
+          <tr>
+            <th>Table</th>
+            <th>Part II: Table 4 — Taxable Outward &amp; RCM Supplies</th>
+            <th class="num-cell">Books Taxable</th>
+            <th class="num-cell">Books Tax</th>
+            <th class="num-cell">GSTR-1 Taxable</th>
+            <th class="num-cell">GSTR-1 Tax</th>
+            <th class="num-cell">GSTR-9 Rec. Taxable</th>
+            <th class="num-cell">GSTR-9 Rec. Tax</th>
+            <th class="num-cell">Var (Books - 1)</th>
+          </tr>
+        </thead>
+        <tbody>${renderT4Rows(t4)}</tbody>
+      </table>
+      <table class="ledger-table" style="margin-top:16px;">
+        <thead>
+          <tr>
+            <th>Table</th>
+            <th>Part II: Table 5 — Zero/Exempt/Nil Turnover &amp; Annual 5N Tie-Out</th>
+            <th class="num-cell">Books Taxable (₹)</th>
+            <th class="num-cell">GSTR-1 Taxable (₹)</th>
+            <th class="num-cell">GSTR-3B Taxable (₹)</th>
+            <th class="num-cell">Var (Books - 1)</th>
+          </tr>
+        </thead>
+        <tbody>${renderT5Rows(t5)}</tbody>
+      </table>
+    `;
+    return;
+  }
+
+  if (currentGstr9SubTab === "itc") {
+    const headSum = (r) => Number(r.igst || 0) + Number(r.cgst || 0) + Number(r.sgst || 0) + Number(r.cess || 0);
+    const renderHeadRows = (rows) => rows.map(r => {
+      const cls = r.is_total ? "g9-table-total" : (r.is_subtotal ? "g9-table-total" : "");
+      return `
+        <tr class="${cls}">
+          <td><strong>${escHtml(r.code)}</strong></td>
+          <td>${escHtml(r.desc)}</td>
+          <td class="num-cell">${formatINR(r.igst)}</td>
+          <td class="num-cell">${formatINR(r.cgst)}</td>
+          <td class="num-cell">${formatINR(r.sgst)}</td>
+          <td class="num-cell">${formatINR(r.cess)}</td>
+          <td class="num-cell"><strong>${formatINR(headSum(r))}</strong></td>
+        </tr>
+      `;
+    }).join("");
+
+    box.innerHTML = `
+      <table class="ledger-table">
+        <thead>
+          <tr>
+            <th>Row</th>
+            <th>ITC Description (Tables 6, 7 &amp; 8)</th>
+            <th class="num-cell">IGST (₹)</th>
+            <th class="num-cell">CGST (₹)</th>
+            <th class="num-cell">SGST (₹)</th>
+            <th class="num-cell">Cess (₹)</th>
+            <th class="num-cell">Total Tax (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="7" style="background:#f8fafc; font-weight:700; font-size:0.75rem;">TABLE 6 — DETAILS OF ITC AVAILED DURING THE FINANCIAL YEAR</td></tr>
+          ${renderHeadRows(t.table_6 || [])}
+          <tr><td colspan="7" style="background:#f8fafc; font-weight:700; font-size:0.75rem;">TABLE 7 — ITC REVERSED &amp; INELIGIBLE ITC FOR THE FINANCIAL YEAR</td></tr>
+          ${renderHeadRows(t.table_7 || [])}
+          <tr><td colspan="7" style="background:#f8fafc; font-weight:700; font-size:0.75rem;">TABLE 8 — COMPARISON OF ITC WITH AUTO-POPULATED GSTR-2B (8A - 8B - 8C = 8D)</td></tr>
+          ${renderHeadRows(t.table_8 || [])}
+        </tbody>
+      </table>
+    `;
+    return;
+  }
+
+  if (currentGstr9SubTab === "tax") {
+    const t9Rows = (t.table_9 || []).map(r => `
+      <tr>
+        <td><strong>${escHtml(r.code)}</strong></td>
+        <td>${escHtml(r.head)}</td>
+        <td class="num-cell">${formatINR(r.tax_payable)}</td>
+        <td class="num-cell">${formatINR(r.paid_through_cash)}</td>
+        <td class="num-cell">${formatINR(r.paid_through_itc)}</td>
+        <td class="num-cell">${formatINR(r.total_paid)}</td>
+        <td class="num-cell"><strong>${formatINR(r.shortfall_excess)}</strong></td>
+      </tr>
+    `).join("");
+
+    const t10Rows = (t.tables_10_14 || []).map(r => `
+      <tr>
+        <td><strong>Table ${escHtml(r.code)}</strong></td>
+        <td>${escHtml(r.desc)}</td>
+        <td class="num-cell">${formatINR(r.taxable)}</td>
+        <td class="num-cell">${formatINR(r.igst)}</td>
+        <td class="num-cell">${formatINR(r.cgst)}</td>
+        <td class="num-cell">${formatINR(r.sgst)}</td>
+        <td class="num-cell">${formatINR(r.cess)}</td>
+      </tr>
+    `).join("");
+
+    const s = currentGstr9Data.summary || {};
+    box.innerHTML = `
+      <table class="ledger-table">
+        <thead>
+          <tr>
+            <th>Tax Head</th>
+            <th>Description (Table 9)</th>
+            <th class="num-cell">Tax Payable (₹)</th>
+            <th class="num-cell">Paid via Cash (₹)</th>
+            <th class="num-cell">Paid via ITC (₹)</th>
+            <th class="num-cell">Total Paid (₹)</th>
+            <th class="num-cell">Shortfall / Excess (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${t9Rows}
+          <tr class="g9-table-total">
+            <td><strong>Int/LF</strong></td>
+            <td>Interest &amp; Late Fee Reconciliation (Books vs Portal)</td>
+            <td class="num-cell">Books: ${formatINR(s.books_interest_late_fee)}</td>
+            <td class="num-cell" colspan="2">Portal Paid: ${formatINR(s.portal_interest_late_fee)}</td>
+            <td class="num-cell" colspan="2">Variance: ${formatINR(s.interest_late_fee_diff)}</td>
+          </tr>
+        </tbody>
+      </table>
+      <table class="ledger-table" style="margin-top:16px;">
+        <thead>
+          <tr>
+            <th>Table</th>
+            <th>Part V: Next-FY Statutory Cut-Off Amendments (Apr - Nov)</th>
+            <th class="num-cell">Taxable (₹)</th>
+            <th class="num-cell">IGST (₹)</th>
+            <th class="num-cell">CGST (₹)</th>
+            <th class="num-cell">SGST (₹)</th>
+            <th class="num-cell">Cess (₹)</th>
+          </tr>
+        </thead>
+        <tbody>${t10Rows}</tbody>
+      </table>
+    `;
+    return;
+  }
+
+  if (currentGstr9SubTab === "hsn") {
+    const renderHsnRows = (rows, side) => {
+      if (!rows || rows.length === 0) {
+        return `<tr><td colspan="9" style="text-align:center; padding:24px; color:var(--text-tertiary);">No ${side} HSN line items found.</td></tr>`;
+      }
+      return rows.map(r => {
+        const isOk = r.status === "VALID" || r.status === "COMPLIANT";
+        const badgeCls = isOk ? "g9-badge-ok" : "g9-badge-err";
+        const totalTax = r.total_tax !== undefined ? r.total_tax : (Number(r.igst || 0) + Number(r.cgst || 0) + Number(r.sgst || 0) + Number(r.cess || 0));
+        const effRate = r.effective_rate !== undefined ? r.effective_rate : (Math.abs(Number(r.taxable || 0)) > 0 ? (Math.abs(totalTax) / Math.abs(Number(r.taxable))) * 100 : 0);
+        return `
+          <tr>
+            <td><strong>${escHtml(side)}</strong></td>
+            <td><span class="invoice-pill">${escHtml(r.hsn || "MISSING")}</span></td>
+            <td>${escHtml(r.uqc)}</td>
+            <td class="num-cell">${Number(r.qty || 0).toLocaleString("en-IN")}</td>
+            <td class="num-cell">${Number(r.rate || 0).toFixed(1)}%</td>
+            <td class="num-cell">${formatINR(r.taxable)}</td>
+            <td class="num-cell">${formatINR(totalTax)}</td>
+            <td class="num-cell">${Number(effRate).toFixed(2)}%</td>
+            <td><span class="${badgeCls}" title="${escHtml(r.issues || "")}">${escHtml(r.issues || r.status)}</span></td>
+          </tr>
+        `;
+      }).join("");
+    };
+
+    box.innerHTML = `
+      <table class="ledger-table">
+        <thead>
+          <tr>
+            <th>Table / Side</th>
+            <th>HSN / SAC</th>
+            <th>UQC</th>
+            <th class="num-cell">Total Qty</th>
+            <th class="num-cell">Declared Rate</th>
+            <th class="num-cell">Taxable (₹)</th>
+            <th class="num-cell">Total Tax (₹)</th>
+            <th class="num-cell">Effective Rate</th>
+            <th>Validation Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${renderHsnRows(t.table_17 || [], "Table 17 (Outward)")}
+          ${renderHsnRows(t.table_18 || [], "Table 18 (Inward)")}
+        </tbody>
+      </table>
+    `;
+    return;
+  }
+
+  // Reversals & Table 8D Drilldown
+  const rev = currentGstr9Data.reversals_schedule || [];
+  const d8 = currentGstr9Data.table_8d_drilldown || [];
+  const revRows = rev.length ? rev.map(r => `
+    <tr>
+      <td><span class="g9-badge-warn">${escHtml(r.rule)}</span></td>
+      <td><strong>${escHtml(r.party)}</strong><div class="vendor-gstin">${escHtml(r.gstin)}</div></td>
+      <td>${escHtml(r.inv_no)}</td>
+      <td>${escHtml(r.doc_date)}</td>
+      <td class="num-cell">${formatINR(r.taxable)}</td>
+      <td class="num-cell"><strong>${formatINR(r.tax_amount)}</strong></td>
+      <td>${escHtml(r.reason)}</td>
+    </tr>
+  `).join("") : `<tr><td colspan="7" style="text-align:center; padding:18px; color:var(--text-tertiary);">No statutory ITC reversals flagged.</td></tr>`;
+
+  const d8Rows = d8.length ? d8.map(r => `
+    <tr>
+      <td><span class="g9-badge-err">${escHtml(r.category)}</span></td>
+      <td><strong>${escHtml(r.party)}</strong><div class="vendor-gstin">${escHtml(r.gstin)}</div></td>
+      <td>${escHtml(r.inv_no)}</td>
+      <td class="num-cell">${formatINR(r.books_tax)}</td>
+      <td class="num-cell">${formatINR(r.portal_tax)}</td>
+      <td class="num-cell"><strong>${formatINR(r.diff_tax)}</strong></td>
+      <td>${escHtml(r.action)}</td>
+    </tr>
+  `).join("") : `<tr><td colspan="7" style="text-align:center; padding:18px; color:var(--text-tertiary);">Zero Table 8D unreconciled variance items.</td></tr>`;
+
+  box.innerHTML = `
+    <table class="ledger-table">
+      <thead>
+        <tr>
+          <th>Reversal Rule</th>
+          <th>Party / Ledger</th>
+          <th>Invoice / Note</th>
+          <th>Date</th>
+          <th class="num-cell">Taxable (₹)</th>
+          <th class="num-cell">Reversed Tax (₹)</th>
+          <th>Audit Justification</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="7" style="background:#f8fafc; font-weight:700; font-size:0.75rem;">SEC 17(5) / SEC 17(1) / RULE 37 / RULE 42 REVERSAL SCHEDULE</td></tr>
+        ${revRows}
+      </tbody>
+    </table>
+    <table class="ledger-table" style="margin-top:16px;">
+      <thead>
+        <tr>
+          <th>Table 8D Category</th>
+          <th>Counterparty</th>
+          <th>Invoice #</th>
+          <th class="num-cell">Books Tax (₹)</th>
+          <th class="num-cell">2B Tax (₹)</th>
+          <th class="num-cell">Variance (₹)</th>
+          <th>Recommended CA Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td colspan="7" style="background:#f8fafc; font-weight:700; font-size:0.75rem;">TABLE 8D VENDOR-WISE UNRECONCILED ITC DRILLDOWN</td></tr>
+        ${d8Rows}
+      </tbody>
+    </table>
+  `;
+}
+
+async function handleGstr9Export() {
+  if (!currentGstr9Data) {
+    alert("Please run the GSTR-9 Engine or Load 12M FY Sample first.");
+    return;
+  }
+  const btn = document.getElementById("btnG9ExportExcel");
+  const orig = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>Generating 8-Sheet Working Paper...</span>";
+  }
+
+  try {
+    const res = await fetch("/api/gstr9/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(currentGstr9Data),
+    });
+    if (!res.ok) throw new Error("GSTR-9 Excel export failed on server.");
+    const blob = await res.blob();
+    const fy = ((currentGstr9Data.summary || {}).financial_year || "2025-26").replace("/", "-");
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `TallyWalls_GSTR9_Working_Paper_FY${fy}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    alert("GSTR-9 Export Error: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
   }
 }
