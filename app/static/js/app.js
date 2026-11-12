@@ -233,10 +233,13 @@ function updateEnvironmentUI() {
       <strong>TallyWalls Connector Required for Live Sync:</strong>
       Cloud servers cannot open a browser on your desktop or reach <code>localhost:9000</code>.
       Start <strong>TallyWallsConnector.exe</strong> on your Windows PC, or use <strong>Demo / Manual Upload</strong>.
-      <div style="margin-top:6px;">
+      <div style="margin-top:6px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <button type="button" onclick="openConnectorModal();" class="btn-ui btn-accent" style="padding:4px 10px; font-size:0.74rem;">
           Setup / Pair Local Connector
         </button>
+        <a href="/connector" target="_blank" rel="noopener noreferrer" style="font-size:0.74rem; font-weight:600; color:#b45309; text-decoration:underline;">
+          Download &amp; Setup Page
+        </a>
       </div>
     </div>
   `;
@@ -647,6 +650,17 @@ function setupEventListeners() {
 
   const btnDisconnect = document.getElementById("btnDisconnectConnector");
   if (btnDisconnect) btnDisconnect.addEventListener("click", unpairConnector);
+
+  const btnDirectDownload = document.getElementById("btnDirectDownloadConnector");
+  if (btnDirectDownload) {
+    btnDirectDownload.addEventListener("click", () => {
+      const msgEl = document.getElementById("connectorStatusMsg");
+      if (msgEl) {
+        msgEl.style.color = "#0369a1";
+        msgEl.textContent = "Downloading TallyWallsConnector_Windows.zip (109.8 MB)... Extract the zip and double-click TallyWallsConnector.exe once finished.";
+      }
+    });
+  }
 
   // Close modals when clicking backdrop
   ["portalModal", "downloadsModal", "tallyModal", "connectorModal"].forEach(id => {

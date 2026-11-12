@@ -188,7 +188,8 @@
     .nav-controls {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
+      flex-wrap: wrap;
     }
 
     .badge-status {
@@ -1470,6 +1471,15 @@
           <span>Load Enterprise Demo</span>
         </button>
 
+        <a href="/connector" class="btn-ui btn-ghost">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>Connector App</span>
+        </a>
+
         <a href="/gst_financial_terms_guide.html" target="_blank" class="btn-ui btn-ghost">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
@@ -2090,8 +2100,11 @@
               GST Portal automation, Tally Prime (<code>localhost:9000</code>), and your Downloads folder stay securely on your computer. Download and double-click <strong>TallyWallsConnector.exe</strong> once, then click <strong>Open TallyWalls Website</strong> in its window for automatic zero-PIN pairing.
             </p>
             <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-              <a href="https://github.com/Abhyuday-Sharma/tallywalls/releases/latest" target="_blank" rel="noopener noreferrer" class="btn-ui btn-accent" style="font-size:0.78rem; padding:7px 12px;">
-                Download TallyWalls Connector (.zip / .exe)
+              <a href="/api/connector/download" download="TallyWallsConnector_Windows.zip" id="btnDirectDownloadConnector" class="btn-ui btn-accent" style="font-size:0.78rem; padding:7px 12px;">
+                Download Connector (.zip &mdash; 109.8 MB)
+              </a>
+              <a href="/connector" target="_blank" rel="noopener noreferrer" class="btn-ui btn-ghost" style="font-size:0.78rem; padding:7px 12px; border:1px solid var(--border-light); color:var(--text-primary); background:#f8fafc;">
+                Setup &amp; Guide Page
               </a>
               <button type="button" id="btnProbeConnector" class="btn-ui btn-ghost" style="font-size:0.78rem; padding:7px 12px; border:1px solid var(--border-light); color:var(--text-primary); background:#f8fafc;">
                 Re-Check Connection

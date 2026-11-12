@@ -19,7 +19,7 @@ import asyncio
 from typing import Optional, List
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pandas as pd
@@ -361,6 +361,58 @@ async def serve_terms_guide():
             with open(p, "r", encoding="utf-8") as f:
                 return HTMLResponse(content=f.read())
     return HTMLResponse(content="<h1>Statutory Terms Guide Not Found</h1>", status_code=404)
+
+
+@app.get("/connector", response_class=HTMLResponse)
+@app.get("/connector.html", response_class=HTMLResponse)
+@app.get("/download", response_class=HTMLResponse)
+async def serve_connector_page():
+    """Serve the built-in Windows Connector download and 3-step setup page."""
+    connector_file = os.path.join(STATIC_DIR, "connector.html")
+    if os.path.exists(connector_file):
+        with open(connector_file, "r", encoding="utf-8") as f:
+            return HTMLResponse(
+                content=f.read(),
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+    return HTMLResponse(content="<h1>Connector download page not found.</h1>", status_code=404)
+
+
+DEFAULT_CONNECTOR_DOWNLOAD_URL = (
+    "https://github.com/Abhyuday-Sharma/tallywalls/releases/latest/download/TallyWallsConnector_Windows.zip"
+)
+
+
+@app.api_route("/api/connector/download", methods=["GET", "HEAD"])
+async def download_connector_archive():
+    """
+    Direct download endpoint for TallyWallsConnector_Windows.zip.
+    Locally serves the built zip if present on disk; on cloud hosts redirects directly
+    to the binary attachment CDN (Content-Disposition: attachment) without showing GitHub UI.
+    """
+    if not _is_cloud_env():
+        local_candidates = [
+            os.path.join(_PARENT_DIR, "dist", "TallyWallsConnector_Windows.zip"),
+            os.path.join(os.getcwd(), "dist", "TallyWallsConnector_Windows.zip"),
+        ]
+        for candidate in local_candidates:
+            if os.path.isfile(candidate):
+                return FileResponse(
+                    path=candidate,
+                    filename="TallyWallsConnector_Windows.zip",
+                    media_type="application/zip",
+                )
+
+    target_url = os.environ.get("TALLYWALLS_CONNECTOR_DOWNLOAD_URL", DEFAULT_CONNECTOR_DOWNLOAD_URL)
+    return RedirectResponse(
+        url=target_url,
+        status_code=302,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.exception_handler(Exception)

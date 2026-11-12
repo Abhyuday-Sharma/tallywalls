@@ -333,3 +333,39 @@ def test_bridge_agent_headless_subprocess(tmp_path):
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=3)
+
+
+def test_inbuilt_connector_download_page_and_routes(monkeypatch):
+    monkeypatch.setenv("VERCEL", "1")
+    client = TestClient(main_mod.app)
+
+    # 1. Built-in connector download & setup page serves cleanly on all expected routes
+    for path in ("/connector", "/connector.html", "/download"):
+        resp = client.get(path)
+        assert resp.status_code == 200, f"Failed route: {path}"
+        assert "Download TallyWalls Connector for Windows" in resp.text
+        assert "/api/connector/download" in resp.text
+        assert "TallyWallsConnector_Windows.zip" in resp.text
+        assert "github.com" not in resp.text.lower()
+
+    # 2. Dashboard index.html no longer sends users to GitHub UI
+    idx = client.get("/")
+    assert idx.status_code == 200
+    assert "/api/connector/download" in idx.text
+    assert "/connector" in idx.text
+    assert "github.com" not in idx.text.lower()
+
+    # 3. Cloud /api/connector/download issues direct binary attachment redirect (GET & HEAD)
+    dl_get = client.get("/api/connector/download", follow_redirects=False)
+    assert dl_get.status_code == 302
+    assert dl_get.headers["location"].endswith("/releases/latest/download/TallyWallsConnector_Windows.zip")
+
+    dl_head = client.head("/api/connector/download", follow_redirects=False)
+    assert dl_head.status_code == 302
+    assert dl_head.headers["location"].endswith("/releases/latest/download/TallyWallsConnector_Windows.zip")
+
+    # 4. Byte-for-byte parity between app/static and public/static
+    for rel_path in ("index.html", "connector.html", os.path.join("js", "app.js")):
+        with open(os.path.join("app", "static", rel_path), "rb") as f1, open(os.path.join("public", "static", rel_path), "rb") as f2:
+            assert f1.read() == f2.read(), f"Static sync mismatch: {rel_path}"
+
