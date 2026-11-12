@@ -279,3 +279,148 @@ def test_zero_emoji_constraint_on_gstr9_files():
     for p in targets:
         txt = p.read_text(encoding="utf-8")
         assert not emoji_re.search(txt), f"Unexpected emoji found in {p}"
+
+
+def _build_minimal_pdf_with_lines(lines):
+    """Build a minimal valid single-page PDF containing text lines readable by pypdf."""
+    def _esc(s):
+        return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+    stream_cmds = ["BT", "/F1 9 Tf", "40 780 Td", "12 TL"]
+    for ln in lines:
+        stream_cmds.append(f"({_esc(ln)}) Tj T*")
+    stream_cmds.append("ET")
+    stream_data = ("\n".join(stream_cmds) + "\n").encode("latin-1")
+
+    objs = [
+        b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
+        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
+        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n",
+        f"4 0 obj << /Length {len(stream_data)} >>\nstream\n".encode("latin-1") + stream_data + b"endstream\nendobj\n",
+        b"5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
+    ]
+
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for obj in objs:
+        offsets.append(len(pdf))
+        pdf.extend(obj)
+    xref_pos = len(pdf)
+    pdf.extend(f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode("latin-1"))
+    for off in offsets:
+        pdf.extend(f"{off:010d} 00000 n \n".encode("latin-1"))
+    pdf.extend(
+        f"trailer << /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n".encode("latin-1")
+    )
+    return bytes(pdf)
+
+
+def test_gstr3b_pdf_extraction_and_classifier():
+    from app.engine.gstr9_parsers import classify_gstr9_file_bytes, parse_gstr3b_inputs
+
+    pdf_lines = [
+        "Form GSTR-3B",
+        "3.1 Details of Outward Supplies and inward supplies liable to reverse charge",
+        "(a) Outward taxable supplies (other than zero rated, nil rated and exempted) 1,250,000.00 112,500.00 56,250.00 56,250.00 0.00",
+        "(b) Outward taxable supplies (zero rated) 100,000.00 18,000.00 - - -",
+        "(c) Other outward supplies (Nil rated, exempted) 25,000.00 - - - -",
+        "(d) Inward supplies (liable to reverse charge) 40,000.00 7,200.00 0.00 0.00 0.00",
+        "4. Eligible ITC",
+        "(A) ITC Available (whether in full or part)",
+        "(3) Inward supplies liable to reverse charge 7,200.00 0.00 0.00 0.00",
+        "(5) All other ITC 90,000.00 30,000.00 30,000.00 0.00",
+        "(B) ITC Reversed",
+        "(1) As per rules 38, 42 & 43 of CGST Rules 2,000.00 1,000.00 1,000.00 0.00",
+        "(D) Ineligible ITC",
+        "(1) As per section 17(5) 5,000.00 0.00 0.00 0.00",
+        "6.1 Payment of tax",
+        "Integrated Tax 137,700.00 95,200.00 0.00 0.00 0.00 42,500.00 500.00 0.00",
+        "Central Tax 56,250.00 0.00 29,000.00 0.00 0.00 27,250.00 0.00 200.00",
+    ]
+    pdf_bytes = _build_minimal_pdf_with_lines(pdf_lines)
+
+    assert classify_gstr9_file_bytes(pdf_bytes, "client_return_may.pdf") == "gstr3b"
+
+    parsed = parse_gstr3b_inputs([(pdf_bytes, "GSTR3B_May2025.pdf")])
+    assert parsed["outward_3_1"]["a_taxable"]["taxable"] == 1250000.0
+    assert parsed["outward_3_1"]["a_taxable"]["igst"] == 112500.0
+    assert parsed["outward_3_1"]["b_zero_rated"]["taxable"] == 100000.0
+    assert parsed["outward_3_1"]["c_nil_exempt"]["taxable"] == 25000.0
+    assert parsed["outward_3_1"]["d_inward_rcm"]["igst"] == 7200.0
+    assert parsed["itc_4"]["4A_3_rcm"]["igst"] == 7200.0
+    assert parsed["itc_4"]["4A_5_all_other"]["igst"] == 90000.0
+    assert parsed["itc_4"]["4A_5_all_other"]["cgst"] == 30000.0
+    assert parsed["itc_4"]["4B_1_rule_42_43"]["igst"] == 2000.0
+    assert parsed["itc_4"]["4D_1_sec_17_5"]["igst"] == 5000.0
+    assert parsed["tax_paid_6_1"]["itc_utilized"]["igst"] == 95200.0
+    assert parsed["tax_paid_6_1"]["cash_paid"]["igst"] == 42500.0
+    assert parsed["tax_paid_6_1"]["cash_paid"]["cgst"] == 27250.0
+    assert parsed["tax_paid_6_1"]["interest_paid"] == 500.0
+    assert parsed["tax_paid_6_1"]["late_fee_paid"] == 200.0
+
+
+def test_gstr9_automation_endpoints_tally_classify_downloads_and_json():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    import bridge_agent
+
+    client = TestClient(app)
+
+    # 1. One-click Tally FY simulate sync -> feed straight into /api/gstr9/compute
+    r_tally = client.post("/api/tally/sync-gstr9", json={"fy": "2025-26", "simulate": True})
+    assert r_tally.status_code == 200
+    t_payload = r_tally.json()
+    assert t_payload["sales_rows"] > 0
+    assert t_payload["purchase_rows"] > 0
+    assert "sales_csv" in t_payload and "purchase_csv" in t_payload
+
+    r_comp = client.post(
+        "/api/gstr9/compute",
+        files=[
+            ("sales_files", ("tally_sales.csv", t_payload["sales_csv"].encode("utf-8"), "text/csv")),
+            ("purchase_files", ("tally_pur.csv", t_payload["purchase_csv"].encode("utf-8"), "text/csv")),
+        ],
+        data={"config_json": json.dumps({"fy": "2025-26", "cutoff_month": 11, "turnover_above_5cr": True})},
+    )
+    assert r_comp.status_code == 200
+    assert r_comp.json()["summary"]["books_turnover"] > 0
+
+    # 2. Mixed multi-file classifier endpoint (/api/gstr9/classify)
+    g1_json = json.dumps({"b2b": [], "b2cs": [{"rt": 18, "txval": 1000, "iamt": 180}], "hsn": {"data": []}}).encode("utf-8")
+    g3b_json = json.dumps({"sup_details": {"osup_det": {"txval": 1000, "iamt": 180}}}).encode("utf-8")
+    pur_csv = b"Supplier Name,Supplier GSTIN,Invoice No,Taxable Value,IGST\nVendor A,27AABCV1234F1Z2,INV1,1000,180\n"
+    r_cls = client.post(
+        "/api/gstr9/classify",
+        files=[
+            ("files", ("portal_export_alpha.json", g1_json, "application/json")),
+            ("files", ("monthly_summary.json", g3b_json, "application/json")),
+            ("files", ("erp_inward_register.csv", pur_csv, "text/csv")),
+        ],
+    )
+    assert r_cls.status_code == 200
+    cls_map = {x["file_name"]: x["bucket"] for x in r_cls.json()["classified"]}
+    assert cls_map["portal_export_alpha.json"] == "gstr1"
+    assert cls_map["monthly_summary.json"] == "gstr3b"
+    assert cls_map["erp_inward_register.csv"] == "purchase"
+
+    # 3. GSTN JSON export (/api/gstr9/export-json)
+    sample_data = client.get("/api/gstr9/sample").json()
+    r_json = client.post("/api/gstr9/export-json", json=sample_data)
+    assert r_json.status_code == 200
+    assert "TallyWalls_GSTR9_GSTN_FY2025-26.json" in r_json.headers.get("content-disposition", "")
+    gstn = r_json.json()
+    assert gstn["schema"] == "TallyWalls-GSTR9-GSTN-Draft-v1"
+    assert len(gstn["table4"]) > 0
+    assert len(gstn["table6"]) > 0
+    assert len(gstn["table17_hsn_outward"]) > 0
+
+    # 4. Bridge Agent GSTR-9 scan-downloads & tally simulate routes (with valid bridge token)
+    b_client = TestClient(bridge_agent.bridge_app)
+    hdrs = {"X-Bridge-Token": bridge_agent.SECURITY_STATE["bridge_token"]}
+    r_b_tally = b_client.post("/bridge/tally/sync-gstr9", json={"fy": "2025-26", "simulate": True}, headers=hdrs)
+    assert r_b_tally.status_code == 200
+    assert r_b_tally.json()["sales_rows"] > 0
+
+    r_b_scan = b_client.get("/bridge/gstr9/scan-downloads", headers=hdrs)
+    assert r_b_scan.status_code == 200
+    assert isinstance(r_b_scan.json().get("matches"), list)

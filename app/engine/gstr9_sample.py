@@ -14,8 +14,8 @@ from app.engine.gstr9_engine import compute_gstr9_return
 from app.engine.gstr9_parsers import empty_gstr3b_structure
 
 
-def run_sample_gstr9_fy2526(turnover_above_5cr: bool = True, cutoff_month: int = 11) -> Dict[str, Any]:
-    """Build deterministic full-year Books + Portal 1/2B/3B datasets and execute GSTR-9 computation."""
+def build_sample_gstr9_datasets(fy: str = "2025-26") -> Dict[str, Any]:
+    """Build deterministic full-year Books + Portal 1/2B/3B sample DataFrames."""
 
     # 1. Company Sales Register (Apr 2025 - Mar 2026 + 2 Next-FY Amendments)
     sales_rows = [
@@ -93,15 +93,28 @@ def run_sample_gstr9_fy2526(turnover_above_5cr: bool = True, cutoff_month: int =
     g3b["tax_paid_6_1"]["interest_paid"] = 4500.0
     g3b["tax_paid_6_1"]["late_fee_paid"] = 1000.0
 
+    return {
+        "sales_df": sales_df,
+        "gstr1_df": gstr1_df,
+        "pur_df": purchase_df,
+        "g2b_df": g2b_df,
+        "g3b": g3b,
+        "books_interest_total": 8000.0,
+    }
+
+
+def run_sample_gstr9_fy2526(turnover_above_5cr: bool = True, cutoff_month: int = 11) -> Dict[str, Any]:
+    """Build deterministic full-year Books + Portal 1/2B/3B datasets and execute GSTR-9 computation."""
+    ds = build_sample_gstr9_datasets(fy="2025-26")
     return compute_gstr9_return(
         fy="2025-26",
         turnover_above_5cr=turnover_above_5cr,
         cutoff_month=cutoff_month,
-        sales_df=sales_df,
-        gstr1_df=gstr1_df,
-        gstr3b_data=g3b,
-        raw_books_purchase_df=purchase_df,
-        raw_2b_df=g2b_df,
+        sales_df=ds["sales_df"],
+        gstr1_df=ds["gstr1_df"],
+        gstr3b_data=ds["g3b"],
+        raw_books_purchase_df=ds["pur_df"],
+        raw_2b_df=ds["g2b_df"],
         manual_overrides={"books_interest": 7000.0, "books_late_fee": 1000.0},
     )
 

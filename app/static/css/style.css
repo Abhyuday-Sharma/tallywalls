@@ -1599,3 +1599,55 @@
       background: #fee2e2;
       color: #991b1b;
     }
+
+    .g9-auto-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      background: #f8fafc;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+    }
+
+    .g9-auto-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .g9-smart-dropzone {
+      border: 1.5px dashed #94a3b8;
+      border-radius: var(--radius-md);
+      background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+      padding: 12px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .g9-smart-dropzone:hover,
+    .g9-smart-dropzone.dragover {
+      border-color: var(--brand-indigo);
+      background: #eef2ff;
+    }
+
+    .g9-smart-dropzone-text strong {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--text-primary);
+    }
+
+    .g9-smart-dropzone-text span {
+      font-size: 0.74rem;
+      color: var(--text-secondary);
+    }

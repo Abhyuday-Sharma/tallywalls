@@ -454,6 +454,91 @@ def scan_recent_downloads(max_age_seconds: int = 86400 * 7) -> List[Dict[str, An
     return found
 
 
+def scan_downloads_for_gstr9(max_age_seconds: int = 86400 * 365) -> List[Dict[str, Any]]:
+    """
+    Scan local Downloads and TallyWalls cache/downloads for GSTR-1, GSTR-2B, GSTR-3B,
+    Sales Register, and Purchase Register files, classifying each into its GSTR-9 bucket.
+    """
+    from app.engine.gstr9_parsers import classify_gstr9_file_bytes
+
+    downloads_dir = get_user_downloads_dir()
+    search_dirs = [DOWNLOADS_DIR, downloads_dir]
+    allowed_exts = (".xlsx", ".xls", ".csv", ".json", ".zip", ".pdf")
+    now = time.time()
+    found: List[Dict[str, Any]] = []
+    seen_paths = set()
+
+    for d in search_dirs:
+        if not os.path.isdir(d):
+            continue
+        for entry_name in os.listdir(d):
+            if not entry_name.lower().endswith(allowed_exts):
+                continue
+            if entry_name.endswith((".crdownload", ".tmp")):
+                continue
+            abs_p = os.path.abspath(os.path.join(d, entry_name))
+            if abs_p in seen_paths or not os.path.isfile(abs_p):
+                continue
+            seen_paths.add(abs_p)
+            try:
+                mtime = os.path.getmtime(abs_p)
+                age = now - mtime
+                if age > max_age_seconds:
+                    continue
+                size = os.path.getsize(abs_p)
+                if size == 0 or size > 25 * 1024 * 1024:
+                    continue
+                # Quick header/content inspection for accurate bucket classification
+                with open(abs_p, "rb") as f:
+                    raw = f.read()
+                bucket = classify_gstr9_file_bytes(raw, entry_name)
+                if bucket == "unknown":
+                    continue
+                found.append({
+                    "file_path": abs_p,
+                    "file_name": entry_name,
+                    "bucket": bucket,
+                    "source_dir": "cache" if d == DOWNLOADS_DIR else "downloads",
+                    "mtime": mtime,
+                    "size_kb": round(size / 1024, 1),
+                    "modified_date": time.strftime("%Y-%m-%d %H:%M", time.localtime(mtime)),
+                })
+            except Exception:
+                continue
+
+    found.sort(key=lambda x: -x["mtime"])
+    return found
+
+
+def load_local_gstr9_files(file_paths: List[str]) -> List[Dict[str, Any]]:
+    """
+    Safely read authorized local files from Downloads or cache/downloads as base64 payloads
+    alongside their classified GSTR-9 bucket.
+    """
+    from app.engine.gstr9_parsers import classify_gstr9_file_bytes
+
+    user_downloads = os.path.abspath(get_user_downloads_dir())
+    cache_downloads = os.path.abspath(DOWNLOADS_DIR)
+    items: List[Dict[str, Any]] = []
+
+    for fp in file_paths or []:
+        abs_p = os.path.abspath(fp)
+        is_safe = abs_p.startswith(user_downloads) or abs_p.startswith(cache_downloads)
+        if not is_safe or not os.path.isfile(abs_p):
+            continue
+        with open(abs_p, "rb") as f:
+            raw = f.read()
+        fname = os.path.basename(abs_p)
+        bucket = classify_gstr9_file_bytes(raw, fname)
+        items.append({
+            "file_name": fname,
+            "bucket": bucket,
+            "size_bytes": len(raw),
+            "content_b64": base64.b64encode(raw).decode("ascii"),
+        })
+    return items
+
+
 def get_return_period_details(period_str: str) -> Dict[str, Any]:
     """
     Map return period input (e.g. '042026', 'April', '112026', 'November')

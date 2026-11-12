@@ -20,7 +20,7 @@ import asyncio
 from typing import Optional, List
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pandas as pd
@@ -29,24 +29,27 @@ from app.engine.column_mapper import detect_columns
 from app.engine.reconciler import run_reconciliation
 from app.engine.excel_exporter import export_reconciliation_excel
 from app.engine.gstr9_parsers import (
+    classify_gstr9_file_bytes,
     extract_generic_files_to_df,
     parse_gstr1_files,
     parse_gstr3b_inputs,
     parse_sales_register_df,
 )
-from app.engine.gstr9_engine import compute_gstr9_return
+from app.engine.gstr9_engine import build_gstr9_gstn_json, compute_gstr9_return
 from app.engine.gstr9_exporter import export_gstr9_excel
 from app.engine.gstr9_sample import run_sample_gstr9_fy2526
 from app.engine.portal_bridge import (
     save_credentials, load_credentials, get_public_profile,
     parse_gstr2b_json, execute_portal_bridge_sync, simulate_portal_download,
-    scan_recent_downloads, ingest_gstr2b_file, sanitize_df_for_json,
+    scan_recent_downloads, scan_downloads_for_gstr9, load_local_gstr9_files,
+    ingest_gstr2b_file, sanitize_df_for_json,
     get_fy_month_sequence, execute_multi_month_portal_bridge_sync,
     simulate_multi_month_download, consolidate_gstr2b_statements,
     DOWNLOADS_DIR, get_user_downloads_dir
 )
 from app.engine.tally_connector import (
-    check_tally_status, fetch_purchase_vouchers_from_tally, simulate_tally_sync
+    check_tally_status, fetch_purchase_vouchers_from_tally,
+    simulate_tally_sync, sync_gstr9_full_fy_from_tally,
 )
 
 app = FastAPI(
@@ -988,6 +991,94 @@ async def export_gstr9_working_paper(data: dict):
         return StreamingResponse(excel_stream, headers=headers)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"GSTR-9 Excel export failed: {str(e)}")
+
+
+@app.post("/api/gstr9/export-json")
+async def export_gstr9_gstn_json_endpoint(data: dict):
+    """Export GSTR-9 statutory Tables 4-18 in structured GSTN JSON format."""
+    try:
+        fy = (data.get("summary") or {}).get("financial_year", "2025-26").replace("/", "-")
+        payload = build_gstr9_gstn_json(data)
+        body = json.dumps(payload, indent=2).encode("utf-8")
+        return Response(
+            content=body,
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f"attachment; filename=TallyWalls_GSTR9_GSTN_FY{fy}.json",
+            },
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GSTR-9 JSON export failed: {str(e)}")
+
+
+class TallyGstr9SyncRequest(BaseModel):
+    fy: Optional[str] = "2025-26"
+    host: Optional[str] = "localhost"
+    port: Optional[int] = 9000
+    simulate: Optional[bool] = False
+
+
+class LocalGstr9BatchRequest(BaseModel):
+    file_paths: List[str]
+
+
+@app.post("/api/tally/sync-gstr9")
+async def sync_gstr9_tally_endpoint(req: TallyGstr9SyncRequest):
+    """Pull Full-FY Sales, Purchases, Interest/Late Fee & Rule 37 payables from Tally Prime."""
+    if not req.simulate:
+        _require_local_desktop("Live Tally Prime GSTR-9 Sync (localhost:9000)")
+    try:
+        res = await asyncio.to_thread(
+            sync_gstr9_full_fy_from_tally,
+            req.fy or "2025-26",
+            req.host or "localhost",
+            req.port or 9000,
+            bool(req.simulate),
+        )
+        return res
+    except ConnectionError as ce:
+        raise HTTPException(status_code=503, detail=f"Tally Prime unreachable: {str(ce)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Tally GSTR-9 sync failed: {str(e)}")
+
+
+@app.get("/api/gstr9/scan-downloads")
+async def scan_gstr9_downloads_endpoint():
+    """Scan local Downloads & cache/downloads for GSTR-1, GSTR-2B, GSTR-3B, Sales & Purchase files."""
+    _require_local_desktop("Local Downloads folder scanning")
+    try:
+        matches = await asyncio.to_thread(scan_downloads_for_gstr9, 86400 * 365)
+        return {"status": "success", "matches": matches}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to scan Downloads: {str(e)}")
+
+
+@app.post("/api/gstr9/load-local-batch")
+async def load_gstr9_local_batch_endpoint(req: LocalGstr9BatchRequest):
+    """Read classified local GSTR-9 files securely so browser attaches them into slots."""
+    _require_local_desktop("Local file batch loading")
+    try:
+        items = await asyncio.to_thread(load_local_gstr9_files, req.file_paths)
+        return {"status": "success", "items": items}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load local files: {str(e)}")
+
+
+@app.post("/api/gstr9/classify")
+async def classify_gstr9_uploads_endpoint(files: Optional[List[UploadFile]] = File(default=[])):
+    """Classify mixed uploaded GST/ERP files into sales/gstr1/gstr3b/purchase/gstr2b buckets."""
+    out = []
+    for f in files or []:
+        if not f or not f.filename:
+            continue
+        raw = await f.read()
+        fname = f.filename
+        if fname.lower().endswith(".gz"):
+            raw = gzip.decompress(raw)
+            fname = fname[:-3]
+        bucket = classify_gstr9_file_bytes(raw, fname)
+        out.append({"file_name": f.filename, "bucket": bucket})
+    return {"status": "success", "classified": out}
 
 
 @app.get("/api/health")

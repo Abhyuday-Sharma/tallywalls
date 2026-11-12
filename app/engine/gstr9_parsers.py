@@ -547,18 +547,289 @@ def _add_tax_dict(target: Dict[str, float], src: Dict[str, Any]) -> None:
         target[k] = round(target[k] + _to_float(src.get(k, 0.0)), 2)
 
 
+_NUM_OR_DASH_RE = re.compile(r"(?<![A-Za-z0-9.])(?:\d{1,3}(?:,\d{2,3})*(?:\.\d+)?|\d+\.\d+|-(?!\d))(?![A-Za-z0-9.])")
+
+
+def _extract_row_numbers(text: str) -> List[float]:
+    """Extract numeric amounts (treating standalone '-' as 0.0) in reading order."""
+    vals: List[float] = []
+    for tok in _NUM_OR_DASH_RE.findall(text or ""):
+        if tok == "-":
+            vals.append(0.0)
+        else:
+            vals.append(_to_float(tok))
+    return vals
+
+
+def parse_gstr3b_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]:
+    """
+    Parse official GST Portal Form GSTR-3B PDF text into canonical GSTR-3B summary dict.
+    Extracts Table 3.1(a)-(e), Table 4(A)-(D), and Table 6.1 tax/cash/ITC/interest/late fee.
+    """
+    out = empty_gstr3b_structure()
+    if not pdf_bytes:
+        return out
+
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    full_text = "\n".join((page.extract_text() or "") for page in reader.pages)
+    if not full_text.strip():
+        return out
+
+    lines = [re.sub(r"\s+", " ", ln).strip() for ln in full_text.splitlines() if ln and ln.strip()]
+
+    # Join wrapped label lines with their trailing number line if a line has no numbers
+    merged_lines: List[str] = []
+    for ln in lines:
+        if (
+            merged_lines
+            and not _NUM_OR_DASH_RE.search(merged_lines[-1])
+            and re.match(r"^(?:\([a-eA-D1-5]+\)|Integrated\s+Tax|Central\s+Tax|State/UT\s+Tax|Cess)", merged_lines[-1], re.I)
+            and _NUM_OR_DASH_RE.search(ln)
+            and not re.match(r"^(?:3\.1|4\.|5\.|6\.1|\([a-eA-D1-5]+\))", ln, re.I)
+        ):
+            merged_lines[-1] = f"{merged_lines[-1]} {ln}"
+        else:
+            merged_lines.append(ln)
+
+    section = ""
+    sub4 = ""
+    for ln in merged_lines:
+        low = ln.lower()
+        if "3.1" in low and ("outward" in low or "details of outward" in low):
+            section = "3.1"
+            continue
+        if ("4." in low or "4 " in low) and "eligible itc" in low:
+            section = "4"
+            sub4 = ""
+            continue
+        if ("5." in low or "5 " in low) and "exempt" in low and "nil" in low and "non-gst" in low:
+            section = "5"
+            continue
+        if "6.1" in low and "payment of tax" in low:
+            section = "6.1"
+            continue
+
+        if section == "3.1":
+            nums = _extract_row_numbers(ln)
+            # Filter out leading list marker if parsed as number
+            if re.match(r"^\(?a\)?\b", low) or "other than zero rated" in low or ("outward taxable" in low and "zero" not in low):
+                vals = nums[-5:] if len(nums) >= 5 else nums + [0.0] * (5 - len(nums))
+                _add_tax_dict(out["outward_3_1"]["a_taxable"], dict(zip(["taxable", "igst", "cgst", "sgst", "cess"], vals)))
+            elif re.match(r"^\(?b\)?\b", low) or "zero rated" in low:
+                vals = nums[-5:] if len(nums) >= 5 else nums + [0.0] * (5 - len(nums))
+                _add_tax_dict(out["outward_3_1"]["b_zero_rated"], dict(zip(["taxable", "igst", "cgst", "sgst", "cess"], vals)))
+            elif re.match(r"^\(?c\)?\b", low) or ("nil rated" in low and "exempted" in low):
+                vals = nums[-5:] if len(nums) >= 5 else nums + [0.0] * (5 - len(nums))
+                _add_tax_dict(out["outward_3_1"]["c_nil_exempt"], dict(zip(["taxable", "igst", "cgst", "sgst", "cess"], vals)))
+            elif re.match(r"^\(?d\)?\b", low) or "reverse charge" in low:
+                vals = nums[-5:] if len(nums) >= 5 else nums + [0.0] * (5 - len(nums))
+                _add_tax_dict(out["outward_3_1"]["d_inward_rcm"], dict(zip(["taxable", "igst", "cgst", "sgst", "cess"], vals)))
+            elif re.match(r"^\(?e\)?\b", low) or "non-gst" in low:
+                vals = nums[-5:] if len(nums) >= 5 else nums + [0.0] * (5 - len(nums))
+                _add_tax_dict(out["outward_3_1"]["e_non_gst"], dict(zip(["taxable", "igst", "cgst", "sgst", "cess"], vals)))
+
+        elif section == "4":
+            if "(a)" in low and "itc available" in low:
+                sub4 = "A"
+            elif "(b)" in low and "itc reversed" in low:
+                sub4 = "B"
+            elif "(d)" in low and "ineligible" in low:
+                sub4 = "D"
+
+            nums = _extract_row_numbers(ln)
+            # Strip leading bullet digit 1..5 if captured before amounts
+            if len(nums) >= 5 and nums[0] in (1.0, 2.0, 3.0, 4.0, 5.0):
+                nums = nums[1:]
+            vals4 = nums[-4:] if len(nums) >= 4 else nums + [0.0] * (4 - len(nums))
+            d4 = dict(zip(["igst", "cgst", "sgst", "cess"], vals4))
+
+            if "import of goods" in low:
+                _add_tax_dict(out["itc_4"]["4A_1_import_goods"], d4)
+            elif "import of services" in low:
+                _add_tax_dict(out["itc_4"]["4A_2_import_services"], d4)
+            elif "reverse charge" in low and ("sub-section" in low or "(3)" in low or sub4 == "A"):
+                _add_tax_dict(out["itc_4"]["4A_3_rcm"], d4)
+            elif "from isd" in low or "(4)" in low and sub4 == "A":
+                _add_tax_dict(out["itc_4"]["4A_4_isd"], d4)
+            elif "all other itc" in low or ("(5)" in low and sub4 == "A"):
+                _add_tax_dict(out["itc_4"]["4A_5_all_other"], d4)
+            elif "rules 38" in low or "rule 42" in low or "rule 43" in low or ("(1)" in low and sub4 == "B"):
+                _add_tax_dict(out["itc_4"]["4B_1_rule_42_43"], d4)
+            elif sub4 == "B" and ("others" in low or "(2)" in low) and len(nums) >= 4:
+                _add_tax_dict(out["itc_4"]["4B_2_other_reversals"], d4)
+            elif "17(5)" in low or ("(1)" in low and sub4 == "D"):
+                _add_tax_dict(out["itc_4"]["4D_1_sec_17_5"], d4)
+            elif sub4 == "D" and ("others" in low or "(2)" in low) and len(nums) >= 4:
+                _add_tax_dict(out["itc_4"]["4D_2_other_ineligible"], d4)
+
+        elif section == "6.1":
+            head = None
+            if re.search(r"\bintegrated\s+tax\b", low):
+                head = "igst"
+            elif re.search(r"\bcentral\s+tax\b", low):
+                head = "cgst"
+            elif re.search(r"\bstate/ut\s+tax\b|\bstate\s+tax\b", low):
+                head = "sgst"
+            elif re.search(r"\bcess\b", low) and "tax payable" not in low:
+                head = "cess"
+
+            if head:
+                nums = _extract_row_numbers(ln)
+                # Standard GSTR-3B 6.1 layout after head label:
+                # [Tax payable, ITC_IGST, ITC_CGST, ITC_SGST, ITC_Cess, Cash_Paid, Interest, Late_Fee] (8 cols)
+                # or older 9-col with TDS/TCS. Using tail indexing guarantees Cash/Interest/LateFee alignment.
+                if len(nums) >= 8:
+                    itc_used = sum(nums[1:5])
+                    cash_paid = nums[-3]
+                    intr_paid = nums[-2]
+                    late_paid = nums[-1]
+                    out["tax_paid_6_1"]["itc_utilized"][head] = round(out["tax_paid_6_1"]["itc_utilized"][head] + itc_used, 2)
+                    out["tax_paid_6_1"]["cash_paid"][head] = round(out["tax_paid_6_1"]["cash_paid"][head] + cash_paid, 2)
+                    out["tax_paid_6_1"]["interest_paid"] = round(out["tax_paid_6_1"]["interest_paid"] + intr_paid, 2)
+                    out["tax_paid_6_1"]["late_fee_paid"] = round(out["tax_paid_6_1"]["late_fee_paid"] + late_paid, 2)
+                elif len(nums) >= 4:
+                    # Simplified 6.1 summary: [Payable, ITC, Cash, Int+LF]
+                    out["tax_paid_6_1"]["itc_utilized"][head] = round(out["tax_paid_6_1"]["itc_utilized"][head] + nums[1], 2)
+                    out["tax_paid_6_1"]["cash_paid"][head] = round(out["tax_paid_6_1"]["cash_paid"][head] + nums[2], 2)
+                    out["tax_paid_6_1"]["interest_paid"] = round(out["tax_paid_6_1"]["interest_paid"] + nums[3], 2)
+
+    return out
+
+
+def classify_gstr9_file_bytes(file_bytes: bytes, filename: str) -> str:
+    """
+    Auto-classify an arbitrary GST/ERP file into one of:
+      'gstr1', 'gstr2b', 'gstr3b', 'sales', 'purchase', 'unknown'
+    Inspects extension, JSON structure, Excel sheet names, and column headers.
+    """
+    fname = (filename or "").lower()
+
+    # 1. PDFs containing 3B / GSTR-3B markers -> gstr3b
+    if fname.endswith(".pdf"):
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(file_bytes))
+            sample_txt = " ".join((p.extract_text() or "") for p in reader.pages[:2]).lower()
+            if "gstr-3b" in sample_txt or "gstr 3b" in sample_txt or ("3.1" in sample_txt and "eligible itc" in sample_txt):
+                return "gstr3b"
+        except Exception:
+            pass
+        if "3b" in fname:
+            return "gstr3b"
+        return "unknown"
+
+    # 2. Check structured JSON or ZIP-of-JSON
+    try:
+        sheets = _read_excel_or_csv_bytes(file_bytes, filename)
+    except Exception:
+        sheets = {}
+
+    if "__JSON__" in sheets:
+        raw = sheets["__JSON__"].iloc[0]["__payload__"]
+        if isinstance(raw, dict):
+            if "sup_details" in raw or "itc_elg" in raw or "outward_3_1" in raw:
+                return "gstr3b"
+            if "data" in raw and isinstance(raw["data"], dict) and "docdata" in raw["data"]:
+                return "gstr2b"
+            if "b2cs" in raw or "hsn" in raw or "cdnr" in raw or "exp" in raw or "b2cl" in raw:
+                return "gstr1"
+            if "b2b" in raw:
+                if "gstr1" in fname or "r1" in fname:
+                    return "gstr1"
+                return "gstr2b"
+
+    # 3. Inspect Excel sheets & headers
+    sheet_names_low = " ".join(s.lower() for s in sheets.keys())
+    if "b2cs" in sheet_names_low or "b2cl" in sheet_names_low or "exemp" in sheet_names_low:
+        return "gstr1"
+
+    all_cols_low = " ".join(
+        str(c).lower()
+        for sdf in sheets.values()
+        if isinstance(sdf, pd.DataFrame) and not sdf.empty
+        for c in sdf.columns
+    )
+
+    if ("3.1(a)" in all_cols_low or "nature of supplies" in all_cols_low) and ("gstr3b" in fname or "3b" in fname):
+        return "gstr3b"
+    if "itc availability" in all_cols_low or "gstr-5 filing" in all_cols_low or "source" in all_cols_low and "irn" in all_cols_low:
+        return "gstr2b"
+    if "receiver name" in all_cols_low or "gstin/uin of recipient" in all_cols_low or "recipient" in all_cols_low:
+        if "gstr1" in fname or "r1" in fname or "b2b" in sheet_names_low or "sales" not in fname:
+            return "gstr1"
+    if "gstin of supplier" in all_cols_low or "supplier gstin" in all_cols_low:
+        if "2b" in fname or "gstr2b" in fname or "r2b" in fname or "b2b" in sheet_names_low:
+            return "gstr2b"
+        if "purchase" in fname or "voucher" in all_cols_low or "unpaid days" in all_cols_low or "itc category" in all_cols_low:
+            return "purchase"
+
+    # 4. Filename keyword tie-breakers
+    if any(k in fname for k in ("gstr3b", "gstr-3b", "gstr_3b", "_3b_", "r3b")):
+        return "gstr3b"
+    if any(k in fname for k in ("gstr1", "gstr-1", "gstr_1", "_r1_", "_r1.", "r1_")):
+        return "gstr1"
+    if any(k in fname for k in ("gstr2b", "gstr-2b", "gstr_2b", "_2b", "2b_", "r2b")):
+        return "gstr2b"
+    if any(k in fname for k in ("sales", "outward", "revenue")):
+        return "sales"
+    if any(k in fname for k in ("purchase", "inward", "register", "books", "tally")):
+        return "purchase"
+
+    if "b2b" in sheet_names_low:
+        return "gstr2b"
+    if not sheets or all(sdf.empty for sdf in sheets.values() if isinstance(sdf, pd.DataFrame)):
+        return "unknown"
+    return "purchase" if "supplier" in all_cols_low else ("sales" if "customer" in all_cols_low or "buyer" in all_cols_low else "unknown")
+
+
+def _merge_gstr3b_dicts(agg: Dict[str, Any], raw: Dict[str, Any]) -> None:
+    """Merge a canonical GSTR-3B dictionary into the running aggregator."""
+    for sec in ("outward_3_1", "itc_4"):
+        for k, v in (raw.get(sec) or {}).items():
+            if k in agg[sec] and isinstance(v, dict):
+                _add_tax_dict(agg[sec][k], v)
+    tp = raw.get("tax_paid_6_1") or {}
+    if isinstance(tp.get("itc_utilized"), dict):
+        _add_tax_dict(agg["tax_paid_6_1"]["itc_utilized"], tp["itc_utilized"])
+    if isinstance(tp.get("cash_paid"), dict):
+        _add_tax_dict(agg["tax_paid_6_1"]["cash_paid"], tp["cash_paid"])
+    agg["tax_paid_6_1"]["interest_paid"] = round(
+        agg["tax_paid_6_1"]["interest_paid"] + _to_float(tp.get("interest_paid", 0)), 2
+    )
+    agg["tax_paid_6_1"]["late_fee_paid"] = round(
+        agg["tax_paid_6_1"]["late_fee_paid"] + _to_float(tp.get("late_fee_paid", 0)), 2
+    )
+
+
 def parse_gstr3b_inputs(
     file_tuples: List[Tuple[bytes, str]],
     manual_overrides: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
-    Aggregate one or more GSTR-3B Excel/CSV/JSON files and merge explicit UI manual overrides.
+    Aggregate one or more GSTR-3B Excel/CSV/JSON/PDF (or ZIP of them) files and merge explicit UI manual overrides.
     """
     agg = empty_gstr3b_structure()
 
     for fbytes, fname in file_tuples:
         if not fbytes:
             continue
+        low_fn = (fname or "").lower()
+        if low_fn.endswith(".pdf"):
+            _merge_gstr3b_dicts(agg, parse_gstr3b_pdf_bytes(fbytes))
+            continue
+        if low_fn.endswith(".zip"):
+            try:
+                with zipfile.ZipFile(io.BytesIO(fbytes)) as zf:
+                    pdf_members = [m for m in zf.namelist() if m.lower().endswith(".pdf") and not m.startswith("__MACOSX")]
+                    for pm in pdf_members:
+                        _merge_gstr3b_dicts(agg, parse_gstr3b_pdf_bytes(zf.read(pm)))
+                    non_pdf_members = [m for m in zf.namelist() if m.lower().endswith((".xlsx", ".xls", ".csv", ".json")) and not m.startswith("__MACOSX")]
+                    if pdf_members and not non_pdf_members:
+                        continue
+            except Exception:
+                pass
         sheets = _read_excel_or_csv_bytes(fbytes, fname)
         if "__JSON__" in sheets:
             raw = sheets["__JSON__"].iloc[0]["__payload__"]

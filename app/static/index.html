@@ -6,7 +6,7 @@
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="apple-touch-icon" href="/static/img/icon-192.png">
   <title>TallyWalls-GST Intelligence & Reconciliation Hub | GSTR-2B vs. Books</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=3.0">
+  <link rel="stylesheet" href="/static/css/style.css?v=3.1">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
@@ -1999,11 +1999,36 @@
         <div class="section-meta" style="flex-wrap:wrap; gap:12px;">
           <div>
             <h2>GSTR-9 Annual Return Computation &amp; Audit Hub</h2>
-            <p>Consolidate full-year Sales, Purchases, GSTR-1, GSTR-2B (including Apr-Nov Sec 16(4) cut-off), and GSTR-3B into statutory Tables 4-18 &amp; GSTR-9C tie-out.</p>
+            <p>Consolidate full-year Sales, Purchases, GSTR-1, GSTR-2B (including Apr-Nov Sec 16(4) cut-off), and GSTR-3B (.xlsx/.json/.pdf) into statutory Tables 4-18 &amp; GSTR-9C tie-out.</p>
           </div>
           <button type="button" id="btnG9LoadSample" class="btn-ui btn-accent">
             <span>Load 12M FY Sample</span>
           </button>
+        </div>
+
+        <!-- GSTR-9 AUTOMATION BAR & SMART DROP ZONE -->
+        <div class="g9-auto-bar">
+          <div class="g9-auto-actions">
+            <button type="button" id="btnG9TallySync" class="btn-tally-trigger">
+              <span>Sync FY Books from Tally (Port 9000)</span>
+            </button>
+            <button type="button" id="btnG9ScanDownloads" class="btn-scan-trigger">
+              <span>Scan Downloads &amp; Auto-Assign</span>
+            </button>
+            <button type="button" id="btnG9ClearAll" class="btn-portal-trigger" style="background:#f1f5f9; border-color:#cbd5e1; color:#475569;">
+              <span>Clear Attached Files</span>
+            </button>
+          </div>
+          <div id="g9AutoStatus" style="font-size:0.75rem; font-weight:600; color:var(--text-secondary);"></div>
+        </div>
+
+        <div id="g9SmartDropZone" class="g9-smart-dropzone" title="Drop mixed GST returns and Tally registers to auto-sort into buckets">
+          <input type="file" id="g9FileSmartMix" accept=".xlsx,.xls,.csv,.zip,.json,.pdf" multiple hidden>
+          <div class="g9-smart-dropzone-text">
+            <strong>Smart Auto-Classifier Drop Zone (One-Step Upload)</strong>
+            <span>Drop any mix of GSTR-1, GSTR-2B, GSTR-3B (PDF/JSON/Excel), Sales &amp; Purchase files here — TallyWalls sorts every file into the right bucket automatically.</span>
+          </div>
+          <span class="btn-portal-trigger" style="pointer-events:none;">Browse Mixed Files</span>
         </div>
 
         <div class="g9-config-bar">
@@ -2062,9 +2087,9 @@
             </div>
 
             <div class="g9-file-row" id="g9RowGstr3B">
-              <input type="file" id="g9FileGstr3B" accept=".xlsx,.xls,.csv,.zip,.json" multiple hidden>
+              <input type="file" id="g9FileGstr3B" accept=".xlsx,.xls,.csv,.zip,.json,.pdf" multiple hidden>
               <div class="g9-file-meta">
-                <strong>GSTR-3B Filed Summary (Optional File)</strong>
+                <strong>GSTR-3B Filed Summary (.pdf / .json / .xlsx)</strong>
                 <span id="g9LabelGstr3B">No GSTR-3B file attached (or use inputs below)</span>
               </div>
               <button type="button" class="btn-portal-trigger" onclick="document.getElementById('g9FileGstr3B').click();">Select Files</button>
@@ -2219,9 +2244,14 @@
               <h3 id="g9VaultTitle" style="font-size:0.98rem; font-weight:700; color:var(--text-primary);">Statutory Working Paper Preview</h3>
               <p id="g9VaultSubtitle" style="font-size:0.78rem; color:var(--text-secondary);">FY 2025-26 | Cut-off: Apr - Nov 30</p>
             </div>
-            <button type="button" id="btnG9ExportExcel" class="btn-ui btn-export">
-              <span>Export GSTR-9 Working Paper (.xlsx)</span>
-            </button>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="button" id="btnG9ExportJson" class="btn-portal-trigger" style="padding:8px 14px; font-size:0.8rem;">
+                <span>Export GSTN JSON</span>
+              </button>
+              <button type="button" id="btnG9ExportExcel" class="btn-ui btn-export">
+                <span>Export GSTR-9 Working Paper (.xlsx)</span>
+              </button>
+            </div>
           </div>
 
           <div class="segmented-tabs-wrapper">
@@ -2620,6 +2650,6 @@
     <p>TallyWalls-GST Intelligence &amp; Reconciliation Hub &bull; Statutory Compliance Framework &bull; Indian Enterprise Edition</p>
   </footer>
 
-  <script src="/static/js/app.js?v=3.0.1"></script>
+  <script src="/static/js/app.js?v=3.1.0"></script>
 </body>
 </html>

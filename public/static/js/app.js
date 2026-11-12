@@ -1835,6 +1835,11 @@ function setupGstr9HubListeners() {
   const btnExport = document.getElementById("btnG9ExportExcel");
   if (btnExport) btnExport.addEventListener("click", handleGstr9Export);
 
+  const btnExportJson = document.getElementById("btnG9ExportJson");
+  if (btnExportJson) btnExportJson.addEventListener("click", handleGstr9ExportJson);
+
+  setupGstr9Automation();
+
   document.querySelectorAll(".g9-subtab").forEach(btn => {
     btn.addEventListener("click", () => {
       document.querySelectorAll(".g9-subtab").forEach(b => b.classList.remove("active"));
@@ -2486,4 +2491,308 @@ async function handleGstr9Export() {
       btn.innerHTML = orig;
     }
   }
+}
+
+const G9_BUCKET_CONFIG = {
+  sales: ["g9FileSales", "g9LabelSales", "g9RowSales", "No Sales Register attached"],
+  gstr1: ["g9FileGstr1", "g9LabelGstr1", "g9RowGstr1", "No GSTR-1 export attached"],
+  gstr3b: ["g9FileGstr3B", "g9LabelGstr3B", "g9RowGstr3B", "No GSTR-3B file attached (or use inputs below)"],
+  purchase: ["g9FilePurchase", "g9LabelPurchase", "g9RowPurchase", "No Purchase Register attached"],
+  gstr2b: ["g9File2B", "g9Label2B", "g9Row2B", "No GSTR-2B statement attached"],
+};
+
+function setG9AutoStatus(msg, isError = false) {
+  const el = document.getElementById("g9AutoStatus");
+  if (!el) return;
+  el.textContent = msg || "";
+  el.style.color = isError ? "#dc2626" : "#059669";
+}
+
+function _appendFilesToG9Bucket(bucket, filesToAdd) {
+  const cfg = G9_BUCKET_CONFIG[bucket];
+  if (!cfg || !filesToAdd || filesToAdd.length === 0) return 0;
+  const [inId, lblId, rowId, emptyText] = cfg;
+  const inp = document.getElementById(inId);
+  if (!inp) return 0;
+
+  const dt = new DataTransfer();
+  const seen = new Set();
+  if (inp.files) {
+    for (let i = 0; i < inp.files.length; i++) {
+      dt.items.add(inp.files[i]);
+      seen.add(inp.files[i].name);
+    }
+  }
+  let added = 0;
+  for (const f of filesToAdd) {
+    if (!seen.has(f.name)) {
+      dt.items.add(f);
+      seen.add(f.name);
+      added++;
+    }
+  }
+  inp.files = dt.files;
+  updateG9FileRowUI(inId, lblId, rowId, emptyText);
+  return added;
+}
+
+function _clientGuessG9Bucket(filename) {
+  const fn = (filename || "").toLowerCase();
+  if (fn.includes("3b") || fn.endsWith(".pdf")) return "gstr3b";
+  if (fn.includes("gstr1") || fn.includes("gstr-1") || fn.includes("_r1_")) return "gstr1";
+  if (fn.includes("2b") || fn.includes("r2b")) return "gstr2b";
+  if (fn.includes("sales") || fn.includes("outward")) return "sales";
+  if (fn.includes("purchase") || fn.includes("inward") || fn.includes("books")) return "purchase";
+  return "purchase";
+}
+
+async function classifyAndAssignG9Files(fileList) {
+  if (!fileList || fileList.length === 0) return;
+  const files = Array.from(fileList);
+  setG9AutoStatus(`Classifying ${files.length} file(s)...`);
+
+  let bucketMap = {};
+  try {
+    const fd = new FormData();
+    let totalBytes = 0;
+    for (const f of files) {
+      const gz = await _maybeGzipUpload(f);
+      totalBytes += gz.size || 0;
+      fd.append("files", gz);
+    }
+    if (!bridgeState.isCloudBackend || totalBytes <= 4.0 * 1024 * 1024) {
+      const res = await safeFetchJSON("/api/gstr9/classify", { method: "POST", body: fd });
+      for (const item of (res.classified || [])) {
+        bucketMap[item.file_name] = item.bucket;
+      }
+    }
+  } catch (e) {
+    console.warn("Server classify fallback to client heuristics:", e);
+  }
+
+  const grouped = { sales: [], gstr1: [], gstr3b: [], purchase: [], gstr2b: [] };
+  let skipped = 0;
+  for (const f of files) {
+    let b = bucketMap[f.name] || _clientGuessG9Bucket(f.name);
+    if (!grouped[b]) {
+      b = _clientGuessG9Bucket(f.name);
+    }
+    if (grouped[b]) grouped[b].push(f);
+    else skipped++;
+  }
+
+  let totalAdded = 0;
+  const summaryParts = [];
+  for (const [b, arr] of Object.entries(grouped)) {
+    if (arr.length > 0) {
+      const cnt = _appendFilesToG9Bucket(b, arr);
+      totalAdded += cnt;
+      summaryParts.push(`${b.toUpperCase()}: ${arr.length}`);
+    }
+  }
+  const msg = totalAdded > 0
+    ? `Auto-sorted ${files.length} file(s) (${summaryParts.join(", ")})`
+    : "Attached file(s) already present in buckets.";
+  setG9AutoStatus(skipped ? `${msg} | ${skipped} unrecognized` : msg, false);
+}
+
+function clearAllGstr9Inputs() {
+  for (const [inId, lblId, rowId, emptyText] of Object.values(G9_BUCKET_CONFIG)) {
+    const inp = document.getElementById(inId);
+    if (inp) {
+      try { inp.value = ""; } catch (_) {}
+      updateG9FileRowUI(inId, lblId, rowId, emptyText);
+    }
+  }
+  setG9AutoStatus("Cleared attached GSTR-9 files.");
+}
+
+async function handleGstr9ScanDownloads() {
+  if (bridgeState.mode === "cloud_web_only") {
+    openConnectorModal("Start and pair TallyWalls Connector on your Windows PC to scan Downloads and auto-assign GSTR-1, GSTR-2B, GSTR-3B & Books files.");
+    return;
+  }
+  const btn = document.getElementById("btnG9ScanDownloads");
+  const orig = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>Scanning Downloads...</span>";
+  }
+  setG9AutoStatus("Scanning Downloads & cached statements...");
+
+  try {
+    const scanRes = await desktopFetchJSON("/api/gstr9/scan-downloads", "/bridge/gstr9/scan-downloads");
+    const matches = scanRes.matches || [];
+    if (matches.length === 0) {
+      setG9AutoStatus("No GSTR-1, GSTR-2B, GSTR-3B, Sales or Purchase files found in Downloads.", true);
+      return;
+    }
+
+    const batchRes = await desktopFetchJSON("/api/gstr9/load-local-batch", "/bridge/gstr9/load-local-batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_paths: matches.slice(0, 30).map(m => m.file_path) }),
+    });
+    const items = batchRes.items || [];
+    const grouped = { sales: [], gstr1: [], gstr3b: [], purchase: [], gstr2b: [] };
+
+    for (const item of items) {
+      if (!item.content_b64 || !grouped[item.bucket]) continue;
+      const binStr = atob(item.content_b64);
+      const bytes = new Uint8Array(binStr.length);
+      for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+      const fileObj = new File([bytes], item.file_name, { type: "application/octet-stream" });
+      grouped[item.bucket].push(fileObj);
+    }
+
+    const parts = [];
+    let attached = 0;
+    for (const [b, arr] of Object.entries(grouped)) {
+      if (arr.length > 0) {
+        attached += _appendFilesToG9Bucket(b, arr);
+        parts.push(`${b.toUpperCase()}: ${arr.length}`);
+      }
+    }
+    setG9AutoStatus(`Auto-assigned ${items.length} downloaded file(s) -> ${parts.join(", ")}`);
+  } catch (err) {
+    setG9AutoStatus("Downloads Auto-Assign failed: " + err.message, true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+  }
+}
+
+async function handleGstr9TallySync() {
+  if (bridgeState.mode === "cloud_web_only") {
+    openConnectorModal("Start and pair TallyWalls Connector on your Windows PC to pull full-year Sales, Purchases, Interest & Rule 37 data from Tally Prime (localhost:9000).");
+    return;
+  }
+
+  const btn = document.getElementById("btnG9TallySync");
+  const orig = btn ? btn.innerHTML : "";
+  const fy = (document.getElementById("g9Fy") || {}).value || "2025-26";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>Syncing FY from Tally...</span>";
+  }
+  setG9AutoStatus(`Connecting to Tally Prime (Port 9000) for FY ${fy}...`);
+
+  try {
+    const res = await desktopFetchJSON("/api/tally/sync-gstr9", "/bridge/tally/sync-gstr9", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fy, simulate: false }),
+    });
+
+    let attached = 0;
+    if (res.sales_csv) {
+      const fSales = new File([res.sales_csv], `Tally_Sales_Register_FY${fy}.csv`, { type: "text/csv" });
+      attached += _appendFilesToG9Bucket("sales", [fSales]);
+    }
+    if (res.purchase_csv) {
+      const fPur = new File([res.purchase_csv], `Tally_Purchase_Register_FY${fy}.csv`, { type: "text/csv" });
+      attached += _appendFilesToG9Bucket("purchase", [fPur]);
+    }
+    if (res.books_interest_late_fee > 0) {
+      const el = document.getElementById("g9_books_interest_fee");
+      if (el) el.value = String(res.books_interest_late_fee);
+    }
+    if (res.rule37_tax > 0) {
+      const el = document.getElementById("g9_rule37_tax");
+      if (el) el.value = String(res.rule37_tax);
+    }
+    setG9AutoStatus(res.message || `Synced Tally FY ${fy} Registers.`);
+    if (attached > 0) {
+      await handleGstr9Compute();
+    }
+  } catch (err) {
+    setG9AutoStatus("Tally Sync Notice: " + err.message, true);
+    alert("Tally GSTR-9 Sync Notice: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+  }
+}
+
+async function handleGstr9ExportJson() {
+  if (!currentGstr9Data) {
+    alert("Please run the GSTR-9 Engine or Load 12M FY Sample first.");
+    return;
+  }
+  const btn = document.getElementById("btnG9ExportJson");
+  const orig = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>Generating JSON...</span>";
+  }
+  try {
+    const res = await fetch("/api/gstr9/export-json", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(currentGstr9Data),
+    });
+    if (!res.ok) throw new Error("GSTR-9 GSTN JSON export failed on server.");
+    const blob = await res.blob();
+    const fy = ((currentGstr9Data.summary || {}).financial_year || "2025-26").replace("/", "-");
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `TallyWalls_GSTR9_GSTN_FY${fy}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    alert("GSTR-9 JSON Export Error: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+  }
+}
+
+function setupGstr9Automation() {
+  const dropZone = document.getElementById("g9SmartDropZone");
+  const smartInp = document.getElementById("g9FileSmartMix");
+  if (dropZone && smartInp) {
+    dropZone.addEventListener("click", () => smartInp.click());
+    ["dragenter", "dragover"].forEach(ev => {
+      dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add("dragover");
+      });
+    });
+    ["dragleave", "drop"].forEach(ev => {
+      dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove("dragover");
+      });
+    });
+    dropZone.addEventListener("drop", (e) => {
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        classifyAndAssignG9Files(e.dataTransfer.files);
+      }
+    });
+    smartInp.addEventListener("change", () => {
+      if (smartInp.files && smartInp.files.length > 0) {
+        classifyAndAssignG9Files(smartInp.files);
+      }
+    });
+  }
+
+  const btnClear = document.getElementById("btnG9ClearAll");
+  if (btnClear) btnClear.addEventListener("click", clearAllGstr9Inputs);
+
+  const btnScan = document.getElementById("btnG9ScanDownloads");
+  if (btnScan) btnScan.addEventListener("click", handleGstr9ScanDownloads);
+
+  const btnTally = document.getElementById("btnG9TallySync");
+  if (btnTally) btnTally.addEventListener("click", handleGstr9TallySync);
 }

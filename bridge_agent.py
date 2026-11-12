@@ -54,6 +54,8 @@ from app.engine.portal_bridge import (
     simulate_portal_download,
     simulate_multi_month_download,
     scan_recent_downloads,
+    scan_downloads_for_gstr9,
+    load_local_gstr9_files,
     ingest_gstr2b_file,
     consolidate_gstr2b_statements,
     sanitize_df_for_json,
@@ -64,6 +66,7 @@ from app.engine.tally_connector import (
     check_tally_status,
     fetch_purchase_vouchers_from_tally,
     simulate_tally_sync,
+    sync_gstr9_full_fy_from_tally,
 )
 
 BRIDGE_VERSION = "2.4.0"
@@ -265,6 +268,17 @@ class TallySyncRequest(BaseModel):
     simulate: Optional[bool] = False
 
 
+class TallyGstr9SyncRequest(BaseModel):
+    fy: Optional[str] = "2025-26"
+    host: Optional[str] = "localhost"
+    port: Optional[int] = 9000
+    simulate: Optional[bool] = False
+
+
+class LocalGstr9BatchRequest(BaseModel):
+    file_paths: List[str]
+
+
 # ------------------------------------------------------------------
 # Health & Pairing Endpoints
 # ------------------------------------------------------------------
@@ -355,6 +369,41 @@ async def bridge_tally_sync(req: TallySyncRequest):
         raise HTTPException(status_code=503, detail=f"Tally Prime unreachable: {str(ce)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Tally synchronization failed: {str(e)}")
+
+
+@bridge_app.post("/bridge/tally/sync-gstr9")
+async def bridge_tally_sync_gstr9(req: TallyGstr9SyncRequest):
+    try:
+        res = await asyncio.to_thread(
+            sync_gstr9_full_fy_from_tally,
+            req.fy or "2025-26",
+            req.host or "localhost",
+            req.port or 9000,
+            bool(req.simulate),
+        )
+        return res
+    except ConnectionError as ce:
+        raise HTTPException(status_code=503, detail=f"Tally Prime unreachable: {str(ce)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Tally GSTR-9 sync failed: {str(e)}")
+
+
+@bridge_app.get("/bridge/gstr9/scan-downloads")
+async def bridge_gstr9_scan_downloads():
+    try:
+        matches = await asyncio.to_thread(scan_downloads_for_gstr9, 86400 * 365)
+        return {"status": "success", "matches": matches}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to scan local Downloads: {str(e)}")
+
+
+@bridge_app.post("/bridge/gstr9/load-local-batch")
+async def bridge_gstr9_load_local_batch(req: LocalGstr9BatchRequest):
+    try:
+        items = await asyncio.to_thread(load_local_gstr9_files, req.file_paths)
+        return {"status": "success", "items": items}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load local GSTR-9 files: {str(e)}")
 
 
 # ------------------------------------------------------------------

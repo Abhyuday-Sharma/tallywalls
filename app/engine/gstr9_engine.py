@@ -748,3 +748,111 @@ def compute_gstr9_return(
         "table_8d_drilldown": table_8d_drilldown,
         "gstr3b_parsed": gstr3b,
     }
+
+
+def build_gstr9_gstn_json(result: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Generate an official-structured GSTN GSTR-9 Annual Return JSON working payload
+    mapped to statutory Tables 4, 5, 6, 7, 8, 9, 10-14, 17, 18 and GSTR-9C tie-out.
+    """
+    summary = result.get("summary") or {}
+    tables = result.get("tables") or {}
+    fy = summary.get("financial_year", "2025-26")
+
+    return {
+        "schema": "TallyWalls-GSTR9-GSTN-Draft-v1",
+        "fp": fy,
+        "table4": [
+            {
+                "section": r.get("code"),
+                "description": r.get("desc"),
+                "txval": round(float(r.get("gstr9_taxable", (r.get("gstr9") or {}).get("taxable", 0.0))), 2),
+                "iamt": round(float((r.get("gstr9") or {}).get("igst", 0.0)), 2),
+                "camt": round(float((r.get("gstr9") or {}).get("cgst", 0.0)), 2),
+                "samt": round(float((r.get("gstr9") or {}).get("sgst", 0.0)), 2),
+                "csamt": round(float((r.get("gstr9") or {}).get("cess", 0.0)), 2),
+            }
+            for r in (tables.get("table_4") or [])
+        ],
+        "table5": [
+            {
+                "section": r.get("code"),
+                "description": r.get("desc"),
+                "txval": round(float(r.get("books_taxable", 0.0)), 2),
+            }
+            for r in (tables.get("table_5") or [])
+        ],
+        "table6": [
+            {
+                "section": r.get("code"),
+                "description": r.get("desc"),
+                "iamt": round(float(r.get("igst", 0.0)), 2),
+                "camt": round(float(r.get("cgst", 0.0)), 2),
+                "samt": round(float(r.get("sgst", 0.0)), 2),
+                "csamt": round(float(r.get("cess", 0.0)), 2),
+            }
+            for r in (tables.get("table_6") or [])
+        ],
+        "table7": [
+            {
+                "section": r.get("code"),
+                "description": r.get("desc"),
+                "iamt": round(float(r.get("igst", 0.0)), 2),
+                "camt": round(float(r.get("cgst", 0.0)), 2),
+                "samt": round(float(r.get("sgst", 0.0)), 2),
+                "csamt": round(float(r.get("cess", 0.0)), 2),
+            }
+            for r in (tables.get("table_7") or [])
+        ],
+        "table8": [
+            {
+                "section": r.get("code"),
+                "description": r.get("desc"),
+                "iamt": round(float(r.get("igst", 0.0)), 2),
+                "camt": round(float(r.get("cgst", 0.0)), 2),
+                "samt": round(float(r.get("sgst", 0.0)), 2),
+                "csamt": round(float(r.get("cess", 0.0)), 2),
+            }
+            for r in (tables.get("table_8") or [])
+        ],
+        "table9": [
+            {
+                "head": r.get("code"),
+                "txpybl": round(float(r.get("tax_payable", 0.0)), 2),
+                "paid_cash": round(float(r.get("paid_through_cash", 0.0)), 2),
+                "paid_itc": round(float(r.get("paid_through_itc", 0.0)), 2),
+                "diff": round(float(r.get("shortfall_excess", 0.0)), 2),
+            }
+            for r in (tables.get("table_9") or [])
+        ],
+        "table10_14": tables.get("tables_10_14") or [],
+        "table17_hsn_outward": [
+            {
+                "hsn_sc": r.get("hsn"),
+                "uqc": r.get("uqc"),
+                "qty": r.get("qty"),
+                "rt": r.get("rate"),
+                "txval": r.get("taxable"),
+                "iamt": r.get("igst"),
+                "camt": r.get("cgst"),
+                "samt": r.get("sgst"),
+                "csamt": r.get("cess"),
+            }
+            for r in (tables.get("table_17") or [])
+        ],
+        "table18_hsn_inward": [
+            {
+                "hsn_sc": r.get("hsn"),
+                "uqc": r.get("uqc"),
+                "qty": r.get("qty"),
+                "rt": r.get("rate"),
+                "txval": r.get("taxable"),
+                "iamt": r.get("igst"),
+                "camt": r.get("cgst"),
+                "samt": r.get("sgst"),
+                "csamt": r.get("cess"),
+            }
+            for r in (tables.get("table_18") or [])
+        ],
+        "gstr9c_tieout": result.get("gstr9c_bridge") or {},
+    }

@@ -356,3 +356,157 @@ def fetch_gst_expense_ledgers_from_tally(
             books_late_fee += bal
 
     return {"books_interest": round(books_interest, 2), "books_late_fee": round(books_late_fee, 2)}
+
+
+def fetch_overdue_payables_rule37_from_tally(
+    host: str = "localhost",
+    port: int = 9000,
+    days_threshold: int = 180,
+    timeout: float = 8.0,
+) -> Dict[str, Any]:
+    """
+    Query Tally Prime Bills Payable (BILL collection) for creditor invoices remaining
+    unpaid beyond 180 days from bill date to automate Sec 16(2) / Rule 37 reversal tracking.
+    """
+    from datetime import date, datetime
+
+    status = check_tally_status(host, port, timeout=2.0)
+    if not status["active"]:
+        raise ConnectionError("Tally Prime XML server is not running on port 9000.")
+
+    xml_envelope = """<ENVELOPE>
+        <HEADER>
+            <VERSION>1</VERSION>
+            <TALLYREQUEST>Export</TALLYREQUEST>
+            <TYPE>Collection</TYPE>
+            <ID>BillsPayableRule37</ID>
+        </HEADER>
+        <BODY>
+            <DESC>
+                <STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>
+                <TDL><TDLMESSAGE>
+                    <COLLECTION NAME="BillsPayableRule37">
+                        <TYPE>Bill</TYPE>
+                        <FETCH>Name, Parent, BillDate, ClosingBalance</FETCH>
+                    </COLLECTION>
+                </TDLMESSAGE></TDL>
+            </DESC>
+        </BODY>
+    </ENVELOPE>"""
+
+    req = urllib.request.Request(
+        f"http://{host}:{port}",
+        data=xml_envelope.encode("utf-8"),
+        headers={"Content-Type": "text/xml;charset=utf-8"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        xml_content = resp.read().decode("utf-8", errors="ignore")
+
+    root = ET.fromstring(xml_content)
+    today = date.today()
+    overdue_bills = []
+    est_tax_reversal = 0.0
+
+    for bill in root.findall(".//BILL"):
+        raw_dt = (bill.findtext("BILLDATE", "") or "").strip()
+        try:
+            bal = float(bill.findtext("CLOSINGBALANCE", "0") or 0.0)
+        except ValueError:
+            bal = 0.0
+        # Credit payable closing balance in Tally is positive when payable (or negative depending on convention)
+        if abs(bal) < 1.0:
+            continue
+        dt_obj = None
+        if len(raw_dt) == 8 and raw_dt.isdigit():
+            try:
+                dt_obj = datetime.strptime(raw_dt, "%Y%m%d").date()
+            except ValueError:
+                dt_obj = None
+        if dt_obj is None:
+            continue
+        age_days = (today - dt_obj).days
+        if age_days > days_threshold:
+            # Conservative 18/118th GST component estimate when bill is gross of 18% GST
+            est_gst = round(abs(bal) * (18.0 / 118.0), 2)
+            est_tax_reversal += est_gst
+            overdue_bills.append({
+                "bill_ref": (bill.attrib.get("NAME") or bill.findtext("NAME", "")).strip(),
+                "party": (bill.findtext("PARENT", "") or "").strip(),
+                "bill_date": dt_obj.isoformat(),
+                "age_days": age_days,
+                "unpaid_amount": round(abs(bal), 2),
+                "estimated_gst_reversal": est_gst,
+            })
+
+    return {
+        "overdue_bills_count": len(overdue_bills),
+        "estimated_rule37_tax": round(est_tax_reversal, 2),
+        "bills": overdue_bills,
+    }
+
+
+def sync_gstr9_full_fy_from_tally(
+    fy: str = "2025-26",
+    host: str = "localhost",
+    port: int = 9000,
+    simulate: bool = False,
+) -> Dict[str, Any]:
+    """
+    One-click GSTR-9 Full-FY extraction from Tally Prime (or simulated enterprise Tally dataset):
+      - Purchase Register (with Sec 17(5) / Rule 37 columns)
+      - Sales & Credit/Debit Notes Register
+      - Books GST Interest & Late Fee Expense Ledger Totals
+      - >180-Day Overdue Creditor Bills Payable (Rule 37)
+    Returns CSV payloads ready for automatic GSTR-9 form attachment.
+    """
+    if simulate:
+        from app.engine.gstr9_sample import build_sample_gstr9_datasets
+        ds = build_sample_gstr9_datasets(fy=fy)
+        sales_df = ds["sales_df"]
+        pur_df = ds["pur_df"]
+        books_interest_total = float(ds.get("books_interest_total", 0.0))
+        rule37_est = 9000.0
+        overdue_cnt = 1
+        company = f"Sample Enterprise Pvt Ltd (FY {fy})"
+        source = "SIMULATED_TALLY_GSTR9_SYNC"
+    else:
+        status = check_tally_status(host, port, timeout=2.0)
+        if not status.get("active"):
+            raise ConnectionError("Tally Prime XML Server (Port 9000) is offline or not running.")
+        company = status.get("company") or "Connected Tally Company"
+        pur_df = fetch_purchase_vouchers_from_tally(host=host, port=port)
+        sales_df = fetch_sales_vouchers_from_tally(host=host, port=port)
+        try:
+            exp = fetch_gst_expense_ledgers_from_tally(host=host, port=port)
+            books_interest_total = round(float(exp.get("books_interest", 0.0)) + float(exp.get("books_late_fee", 0.0)), 2)
+        except Exception:
+            books_interest_total = 0.0
+        try:
+            r37 = fetch_overdue_payables_rule37_from_tally(host=host, port=port)
+            rule37_est = float(r37.get("estimated_rule37_tax", 0.0))
+            overdue_cnt = int(r37.get("overdue_bills_count", 0))
+        except Exception:
+            rule37_est = 0.0
+            overdue_cnt = 0
+        source = "LIVE_TALLY_GSTR9_SYNC"
+
+    sales_csv = sales_df.to_csv(index=False) if sales_df is not None and not sales_df.empty else ""
+    purchase_csv = pur_df.to_csv(index=False) if pur_df is not None and not pur_df.empty else ""
+
+    return {
+        "status": "success",
+        "source": source,
+        "fy": fy,
+        "company": company,
+        "sales_rows": int(len(sales_df)) if sales_df is not None else 0,
+        "purchase_rows": int(len(pur_df)) if pur_df is not None else 0,
+        "sales_csv": sales_csv,
+        "purchase_csv": purchase_csv,
+        "books_interest_late_fee": round(books_interest_total, 2),
+        "rule37_tax": round(rule37_est, 2),
+        "overdue_bills_count": overdue_cnt,
+        "message": (
+            f"Synced {int(len(sales_df)) if sales_df is not None else 0} Sales & "
+            f"{int(len(pur_df)) if pur_df is not None else 0} Purchase vouchers from {company}."
+        ),
+    }
