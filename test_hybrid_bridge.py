@@ -369,3 +369,255 @@ def test_inbuilt_connector_download_page_and_routes(monkeypatch):
         with open(os.path.join("app", "static", rel_path), "rb") as f1, open(os.path.join("public", "static", rel_path), "rb") as f2:
             assert f1.read() == f2.read(), f"Static sync mismatch: {rel_path}"
 
+
+def test_supplier_invoice_no_priority_over_voucher_no():
+    df_2b = pd.DataFrame([
+        {
+            "GSTIN of supplier": "27AABCU9603R1ZM",
+            "Trade/Legal name": "Apex Fasteners Pvt Ltd",
+            "Invoice number": "SUP/25-26/8821",
+            "Invoice Date": "12/05/2026",
+            "Taxable Value (₹)": 50000.0,
+            "Integrated Tax (₹)": 9000.0,
+            "Central Tax (₹)": 0.0,
+            "State/UT Tax (₹)": 0.0,
+        }
+    ])
+    # Voucher No intentionally comes BEFORE Supplier Invoice No and differs completely
+    df_books = pd.DataFrame([
+        {
+            "Voucher No.": "PUR/26/0001",
+            "Party Name": "Apex Fasteners Pvt Ltd",
+            "GST No": "27AABCU9603R1ZM",
+            "Date": "12-05-2026",
+            "Supplier Invoice No.": "SUP/25-26/8821",
+            "Taxable": 50000.0,
+            "CGST": 0.0,
+            "SGST": 0.0,
+            "IGST": 9000.0,
+        }
+    ])
+    res = run_reconciliation(df_2b, df_books, tolerance=1.0, include_results=True)
+    assert res["summary"]["exact_count"] == 1
+    assert res["summary"]["reconciliation_rate"] == 100.0
+    assert res["summary"]["matched_tax"] == 9000.0
+
+
+def test_multi_rate_split_invoice_consolidation():
+    # Case A: Books splits 1 invoice across 5% + 18%; Portal has 1 consolidated row
+    # Case B: Books has 1 consolidated row; Portal splits across 5% + 18%
+    # Case C: Books has 3 item rows (4k@5%, 6k@5%, 20k@18%); Portal has 2 rate rows (10k@5%, 20k@18%)
+    # Case D: Multi-rate split in Books with prefix formatting vs leading-zero Portal invoice
+    df_2b = pd.DataFrame([
+        {
+            "GSTIN of supplier": "07AAACU1234F1Z5",
+            "Trade/Legal name": "Delhi Electricals Pvt Ltd",
+            "Invoice number": "DE/26/101",
+            "Invoice Date": "10/05/2026",
+            "Taxable Value (₹)": 30000.0,
+            "Integrated Tax (₹)": 0.0,
+            "Central Tax (₹)": 2050.0,
+            "State/UT Tax (₹)": 2050.0,
+        },
+        {
+            "GSTIN of supplier": "27AABCS1429B1Z1",
+            "Trade/Legal name": "Sahyadri Polymers LLP",
+            "Invoice number": "SP/2026/505",
+            "Invoice Date": "14/05/2026",
+            "Rate(%)": 5,
+            "Taxable Value (₹)": 10000.0,
+            "Integrated Tax (₹)": 500.0,
+            "Central Tax (₹)": 0.0,
+            "State/UT Tax (₹)": 0.0,
+        },
+        {
+            "GSTIN of supplier": "27AABCS1429B1Z1",
+            "Trade/Legal name": "Sahyadri Polymers LLP",
+            "Invoice number": "SP/2026/505",
+            "Invoice Date": "14/05/2026",
+            "Rate(%)": 18,
+            "Taxable Value (₹)": 20000.0,
+            "Integrated Tax (₹)": 3600.0,
+            "Central Tax (₹)": 0.0,
+            "State/UT Tax (₹)": 0.0,
+        },
+        {
+            "GSTIN of supplier": "07AAACG4412P1Z8",
+            "Trade/Legal name": "Ganga Hardware Depot",
+            "Invoice number": "GHD/901",
+            "Invoice Date": "18/05/2026",
+            "Rate(%)": 5,
+            "Taxable Value (₹)": 10000.0,
+            "Integrated Tax (₹)": 0.0,
+            "Central Tax (₹)": 250.0,
+            "State/UT Tax (₹)": 250.0,
+        },
+        {
+            "GSTIN of supplier": "07AAACG4412P1Z8",
+            "Trade/Legal name": "Ganga Hardware Depot",
+            "Invoice number": "GHD/901",
+            "Invoice Date": "18/05/2026",
+            "Rate(%)": 18,
+            "Taxable Value (₹)": 20000.0,
+            "Integrated Tax (₹)": 0.0,
+            "Central Tax (₹)": 1800.0,
+            "State/UT Tax (₹)": 1800.0,
+        },
+        {
+            "GSTIN of supplier": "06AAACH1234D1Z2",
+            "Trade/Legal name": "Haryana Precision Forge",
+            "Invoice number": "0042",
+            "Invoice Date": "22/05/2026",
+            "Taxable Value (₹)": 30000.0,
+            "Integrated Tax (₹)": 4100.0,
+            "Central Tax (₹)": 0.0,
+            "State/UT Tax (₹)": 0.0,
+        },
+    ])
+
+    df_books = pd.DataFrame([
+        # Case A (5% + 18% split)
+        {"Party Name": "Delhi Electricals Pvt Ltd", "GST No": "07AAACU1234F1Z5", "Date": "10-05-2026", "Invoice no": "DE/26/101", "Rate(%)": 5, "Taxable": 10000.0, "CGST": 250.0, "SGST": 250.0, "IGST": 0.0},
+        {"Party Name": "Delhi Electricals Pvt Ltd", "GST No": "07AAACU1234F1Z5", "Date": "10-05-2026", "Invoice no": "DE/26/101", "Rate(%)": 18, "Taxable": 20000.0, "CGST": 1800.0, "SGST": 1800.0, "IGST": 0.0},
+        # Case B (combined in Books)
+        {"Party Name": "Sahyadri Polymers LLP", "GST No": "27AABCS1429B1Z1", "Date": "14-05-2026", "Invoice no": "SP/2026/505", "Taxable": 30000.0, "CGST": 0.0, "SGST": 0.0, "IGST": 4100.0},
+        # Case C (3 item rows in Books vs 2 rate rows in Portal)
+        {"Party Name": "Ganga Hardware Depot", "GST No": "07AAACG4412P1Z8", "Date": "18-05-2026", "Invoice no": "GHD/901", "Rate(%)": 5, "Taxable": 4000.0, "CGST": 100.0, "SGST": 100.0, "IGST": 0.0},
+        {"Party Name": "Ganga Hardware Depot", "GST No": "07AAACG4412P1Z8", "Date": "18-05-2026", "Invoice no": "GHD/901", "Rate(%)": 5, "Taxable": 6000.0, "CGST": 150.0, "SGST": 150.0, "IGST": 0.0},
+        {"Party Name": "Ganga Hardware Depot", "GST No": "07AAACG4412P1Z8", "Date": "18-05-2026", "Invoice no": "GHD/901", "Rate(%)": 18, "Taxable": 20000.0, "CGST": 1800.0, "SGST": 1800.0, "IGST": 0.0},
+        # Case D (Normalized prefix vs leading zero)
+        {"Party Name": "Haryana Precision Forge", "GST No": "06AAACH1234D1Z2", "Date": "22-05-2026", "Invoice no": "HPF/26-27/0042", "Rate(%)": 5, "Taxable": 10000.0, "CGST": 0.0, "SGST": 0.0, "IGST": 500.0},
+        {"Party Name": "Haryana Precision Forge", "GST No": "06AAACH1234D1Z2", "Date": "22-05-2026", "Invoice no": "HPF/26-27/0042", "Rate(%)": 18, "Taxable": 20000.0, "CGST": 0.0, "SGST": 0.0, "IGST": 3600.0},
+    ])
+
+    res = run_reconciliation(df_2b, df_books, tolerance=1.0, include_results=True)
+    s = res["summary"]
+    assert s["reconciliation_rate"] == 100.0
+    assert s["missing_in_2b_count"] == 0
+    assert s["missing_in_books_count"] == 0
+    assert s["value_mismatch_count"] == 0
+    assert s["matched_tax"] == 16400.0
+    assert s["books_tax_total"] == 16400.0
+    assert s["portal_tax_total"] == 16400.0
+    assert s["multi_rate_matched_count"] >= 4
+
+
+def test_multi_rate_value_mismatch_and_duplicate_booking_guard():
+    df_2b = pd.DataFrame([
+        # Multi-rate invoice with genuine ₹500 taxable difference (29,500 vs 30,000)
+        {"GSTIN of supplier": "07AAACU1234F1Z5", "Trade/Legal name": "Metro Cables", "Invoice number": "MC/88", "Invoice Date": "05/05/2026", "Taxable Value (₹)": 29500.0, "Integrated Tax (₹)": 0.0, "Central Tax (₹)": 2005.0, "State/UT Tax (₹)": 2005.0},
+        # Single row for duplicate booking test
+        {"GSTIN of supplier": "27AAACT0012A1Z8", "Trade/Legal name": "Tata Steel", "Invoice number": "TS/999", "Invoice Date": "06/05/2026", "Taxable Value (₹)": 10000.0, "Integrated Tax (₹)": 1800.0, "Central Tax (₹)": 0.0, "State/UT Tax (₹)": 0.0},
+    ])
+    df_books = pd.DataFrame([
+        {"Party Name": "Metro Cables", "GST No": "07AAACU1234F1Z5", "Date": "05-05-2026", "Invoice no": "MC/88", "Rate(%)": 5, "Taxable": 10000.0, "CGST": 250.0, "SGST": 250.0, "IGST": 0.0},
+        {"Party Name": "Metro Cables", "GST No": "07AAACU1234F1Z5", "Date": "05-05-2026", "Invoice no": "MC/88", "Rate(%)": 18, "Taxable": 20000.0, "CGST": 1800.0, "SGST": 1800.0, "IGST": 0.0},
+        # Double-entered duplicate in Books
+        {"Party Name": "Tata Steel", "GST No": "27AAACT0012A1Z8", "Date": "06-05-2026", "Invoice no": "TS/999", "Taxable": 10000.0, "CGST": 0.0, "SGST": 0.0, "IGST": 1800.0},
+        {"Party Name": "Tata Steel", "GST No": "27AAACT0012A1Z8", "Date": "06-05-2026", "Invoice no": "TS/999", "Taxable": 10000.0, "CGST": 0.0, "SGST": 0.0, "IGST": 1800.0},
+    ])
+    res = run_reconciliation(df_2b, df_books, tolerance=1.0, include_results=True)
+    s = res["summary"]
+    assert s["value_mismatch_count"] == 1
+    assert s["exact_count"] == 1
+    assert s["missing_in_2b_count"] == 1
+    assert s["itc_at_risk_tax"] == 1800.0
+
+    mismatch_rows = [r for r in res["results"] if r["status"] == "VALUE_MISMATCH"]
+    assert mismatch_rows[0]["taxable_diff"] == 500.0
+    assert mismatch_rows[0]["tax_diff"] == 90.0
+
+    dup_rows = [r for r in res["results"] if r["status"] == "MISSING_IN_2B"]
+    assert "duplicate" in dup_rows[0]["remarks"].lower()
+
+
+def test_sequential_monthly_fixed_bills_not_false_typo():
+    df_2b = pd.DataFrame([
+        # Recurring fixed ₹10,000 Apr bill present in 2B only
+        {"GSTIN of supplier": "07AAACB0000A1Z0", "Trade/Legal name": "Airtel Lease", "Invoice number": "BB/25-26/04", "Invoice Date": "05-04-2026", "Taxable Value (₹)": 10000.0, "Central Tax (₹)": 900.0, "State/UT Tax (₹)": 900.0, "Integrated Tax (₹)": 0.0},
+        # Sequential 3-digit retainer May bill present in 2B only
+        {"GSTIN of supplier": "27AAACR5055K1Z3", "Trade/Legal name": "Retainer Corp", "Invoice number": "RET/26/106", "Invoice Date": "01-06-2026", "Taxable Value (₹)": 25000.0, "Integrated Tax (₹)": 4500.0, "Central Tax (₹)": 0.0, "State/UT Tax (₹)": 0.0},
+        # Genuine typo transposition (49 vs 94, same date)
+        {"GSTIN of supplier": "24AAACA0001B1Z9", "Trade/Legal name": "Asian Paints", "Invoice number": "94", "Invoice Date": "18-05-2026", "Taxable Value (₹)": 12000.0, "Integrated Tax (₹)": 2160.0, "Central Tax (₹)": 0.0, "State/UT Tax (₹)": 0.0},
+    ])
+    df_books = pd.DataFrame([
+        # May bill in Books only (NOT a typo of Apr!)
+        {"Party Name": "Airtel Lease", "GST No": "07AAACB0000A1Z0", "Date": "05-05-2026", "Invoice no": "BB/25-26/05", "Taxable": 10000.0, "CGST": 900.0, "SGST": 900.0, "IGST": 0.0},
+        # Apr 3-digit retainer in Books only (31 days apart -> NOT a typo!)
+        {"Party Name": "Retainer Corp", "GST No": "27AAACR5055K1Z3", "Date": "01-05-2026", "Invoice no": "RET/26/105", "Taxable": 25000.0, "CGST": 0.0, "SGST": 0.0, "IGST": 4500.0},
+        {"Party Name": "Asian Paints", "GST No": "24AAACA0001B1Z9", "Date": "18-05-2026", "Invoice no": "49", "Taxable": 12000.0, "CGST": 0.0, "SGST": 0.0, "IGST": 2160.0},
+    ])
+    res = run_reconciliation(df_2b, df_books, tolerance=1.0, include_results=True)
+    s = res["summary"]
+    assert s["typo_count"] == 1
+    assert s["missing_in_2b_count"] == 2
+    assert s["missing_in_books_count"] == 2
+
+
+def test_ineligible_itc_rcm_and_tax_head_swap_export_parity():
+    df_2b = pd.DataFrame([
+        # Clean eligible supply
+        {"GSTIN of supplier": "07AAACU1234F1Z5", "Trade/Legal name": "Vendor Eligible", "Invoice number": "ELIG/01", "Invoice Date": "04/05/2026", "Taxable Value (₹)": 20000.0, "Central Tax (₹)": 1800.0, "State/UT Tax (₹)": 1800.0, "Integrated Tax (₹)": 0.0, "Supply Attract Reverse Charge": "N", "ITC Availability": "Yes"},
+        # Blocked personal/17(5) item marked ITC Availability = No
+        {"GSTIN of supplier": "07AAACS1111C1Z9", "Trade/Legal name": "Sugar & Sweets Store", "Invoice number": "BLK/02", "Invoice Date": "08/05/2026", "Taxable Value (₹)": 10000.0, "Central Tax (₹)": 900.0, "State/UT Tax (₹)": 900.0, "Integrated Tax (₹)": 0.0, "Supply Attract Reverse Charge": "N", "ITC Availability": "No"},
+        # Reverse charge supply
+        {"GSTIN of supplier": "27AAACG7777D1Z1", "Trade/Legal name": "GTA Logistics RCM", "Invoice number": "RCM/03", "Invoice Date": "10/05/2026", "Taxable Value (₹)": 18000.0, "Central Tax (₹)": 0.0, "State/UT Tax (₹)": 0.0, "Integrated Tax (₹)": 900.0, "Supply Attract Reverse Charge": "Y", "ITC Availability": "Yes"},
+        # Tax-head swap (Portal has IGST, Books booked CGST+SGST)
+        {"GSTIN of supplier": "06AAACB9876C1Z1", "Trade/Legal name": "Swap Components", "Invoice number": "SWP/04", "Invoice Date": "12/05/2026", "Taxable Value (₹)": 10000.0, "Central Tax (₹)": 0.0, "State/UT Tax (₹)": 0.0, "Integrated Tax (₹)": 1800.0, "Supply Attract Reverse Charge": "N", "ITC Availability": "Yes"},
+    ])
+    df_books = pd.DataFrame([
+        {"Party Name": "Vendor Eligible", "GST No": "07AAACU1234F1Z5", "Date": "04-05-2026", "Invoice no": "ELIG/01", "Taxable": 20000.0, "CGST": 1800.0, "SGST": 1800.0, "IGST": 0.0},
+        {"Party Name": "Sugar & Sweets Store", "GST No": "07AAACS1111C1Z9", "Date": "08-05-2026", "Invoice no": "BLK/02", "Taxable": 10000.0, "CGST": 900.0, "SGST": 900.0, "IGST": 0.0},
+        {"Party Name": "GTA Logistics RCM", "GST No": "27AAACG7777D1Z1", "Date": "10-05-2026", "Invoice no": "RCM/03", "Taxable": 18000.0, "CGST": 0.0, "SGST": 0.0, "IGST": 900.0},
+        {"Party Name": "Swap Components", "GST No": "06AAACB9876C1Z1", "Date": "12-05-2026", "Invoice no": "SWP/04", "Taxable": 10000.0, "CGST": 900.0, "SGST": 900.0, "IGST": 0.0},
+    ])
+
+    full_res = run_reconciliation(df_2b, df_books, tolerance=1.0, include_results=True)
+    slim_res = run_reconciliation(df_2b, df_books, tolerance=1.0, include_results=False)
+    s = slim_res["summary"]
+
+    assert s["matched_count"] == 4
+    assert s["gross_matched_tax"] == 8100.0
+    assert s["ineligible_count"] == 1
+    assert s["ineligible_tax"] == 1800.0
+    assert s["matched_tax"] == 6300.0  # Ineligible excluded from eligible claimable ITC
+    assert s["rcm_count"] == 1
+    assert s["rcm_tax"] == 900.0
+    assert s["tax_head_mismatch_count"] == 1
+
+    wb_full = openpyxl.load_workbook(export_reconciliation_excel(full_res))
+    wb_slim = openpyxl.load_workbook(export_reconciliation_excel(slim_res))
+    assert wb_full.sheetnames == wb_slim.sheetnames
+    for sheet in wb_full.sheetnames:
+        assert wb_full[sheet].max_row == wb_slim[sheet].max_row
+
+
+def test_multi_month_upload_preserves_multi_rate_split_rows():
+    client = TestClient(main_mod.app)
+    b2b_apr = (
+        "GSTIN of supplier,Trade/Legal name,Invoice number,Invoice Date,Rate(%),Taxable Value (₹),Integrated Tax (₹),Central Tax (₹),State/UT Tax (₹)\n"
+        "07AAACU1234F1Z5,Delhi Tools Pvt Ltd,MR/001,10/04/2026,5,10000.0,0,250.0,250.0\n"
+        "07AAACU1234F1Z5,Delhi Tools Pvt Ltd,MR/001,10/04/2026,18,20000.0,0,1800.0,1800.0\n"
+    )
+    b2b_may = (
+        "GSTIN of supplier,Trade/Legal name,Invoice number,Invoice Date,Rate(%),Taxable Value (₹),Integrated Tax (₹),Central Tax (₹),State/UT Tax (₹)\n"
+        "27AABCS1429B1Z1,Mumbai Alloys,MR/002,15/05/2026,18,15000.0,2700.0,0,0\n"
+    )
+    books_csv = (
+        "Party Name,GST No,Date,Invoice no,Taxable,CGST,SGST,IGST\n"
+        "Delhi Tools Pvt Ltd,07AAACU1234F1Z5,10-04-2026,MR/001,30000.0,2050.0,2050.0,0\n"
+        "Mumbai Alloys,27AABCS1429B1Z1,15-05-2026,MR/002,15000.0,0,0,2700.0\n"
+    )
+    files = [
+        ("file_2b", ("GSTR2B_Apr_2026.csv", io.BytesIO(b2b_apr.encode("utf-8")), "text/csv")),
+        ("file_2b", ("GSTR2B_May_2026.csv", io.BytesIO(b2b_may.encode("utf-8")), "text/csv")),
+        ("file_books", ("Books_2026.csv", io.BytesIO(books_csv.encode("utf-8")), "text/csv")),
+    ]
+    resp = client.post("/api/reconcile", files=files, data={"tolerance": 1.00})
+    assert resp.status_code == 200
+    s = resp.json()["summary"]
+    assert s["matched_count"] == 2
+    assert s["reconciliation_rate"] == 100.0
+    assert s["matched_tax"] == 6800.0
+
+

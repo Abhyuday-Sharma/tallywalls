@@ -1448,6 +1448,13 @@ function updateUIWithReconData(data) {
         taxable_2b: p.taxable !== undefined ? p.taxable : null,
         tax_amount_2b: p.total_tax !== undefined ? p.total_tax : null,
         total_inv_val_2b: p.total_inv_val !== undefined ? p.total_inv_val : null,
+        books_line_count: r.books_line_count ?? (r.books ? (b.line_count ?? 1) : 0),
+        portal_line_count: r.portal_line_count ?? (r.portal ? (p.line_count ?? 1) : 0),
+        books_slabs: r.books_slabs || "",
+        portal_slabs: r.portal_slabs || "",
+        itc_ineligible: Boolean(r.itc_ineligible),
+        is_rcm: Boolean(r.is_rcm),
+        tax_head_mismatch: Boolean(r.tax_head_mismatch),
         tax_diff: r.tax_diff || 0.0,
         taxable_diff: r.taxable_diff || 0.0,
         audit_remark: r.remarks || ""
@@ -1459,10 +1466,14 @@ function updateUIWithReconData(data) {
   const kpis = (data && data.kpis) ? data.kpis : {
     total_tax_books: sum.books_tax_total ?? 0,
     total_invoices_books: sum.total_books_invoices ?? 0,
+    raw_books_rows: sum.raw_books_rows ?? sum.total_books_invoices ?? 0,
     total_tax_2b: sum.portal_tax_total ?? 0,
     total_invoices_2b: sum.total_2b_invoices ?? 0,
+    raw_2b_rows: sum.raw_2b_rows ?? sum.total_2b_invoices ?? 0,
     matched_itc: sum.matched_tax ?? 0,
     matched_count: sum.matched_count ?? 0,
+    multi_rate_matched_count: sum.multi_rate_matched_count ?? 0,
+    ineligible_itc: sum.ineligible_tax ?? 0,
     reconciliation_percentage: sum.reconciliation_rate ?? 0,
     itc_at_risk: sum.itc_at_risk_tax ?? 0,
     itc_at_risk_count: sum.missing_in_2b_count ?? 0,
@@ -1479,14 +1490,35 @@ function updateUIWithReconData(data) {
     }
   };
 
+  const booksInvCount = kpis.total_invoices_books ?? 0;
+  const rawBooksRows = kpis.raw_books_rows ?? sum.raw_books_rows ?? booksInvCount;
+  const booksFooter = (rawBooksRows > booksInvCount)
+    ? `${booksInvCount} Bills (${rawBooksRows} Rate Lines)`
+    : `${booksInvCount} Invoices in Ledger`;
+
+  const portalInvCount = kpis.total_invoices_2b ?? 0;
+  const rawPortalRows = kpis.raw_2b_rows ?? sum.raw_2b_rows ?? portalInvCount;
+  const portalFooter = (rawPortalRows > portalInvCount)
+    ? `${portalInvCount} Bills (${rawPortalRows} Rate Lines)`
+    : `${portalInvCount} Invoices on Portal`;
+
+  const ineligibleAmt = kpis.ineligible_itc ?? sum.ineligible_tax ?? 0;
+  const multiRateMatched = kpis.multi_rate_matched_count ?? sum.multi_rate_matched_count ?? 0;
+  let matchFooter = `${kpis.reconciliation_percentage ?? 0}% Match Efficiency`;
+  if (ineligibleAmt > 0) {
+    matchFooter = `${kpis.reconciliation_percentage ?? 0}% Match | Blocked: ${formatINR(ineligibleAmt)}`;
+  } else if (multiRateMatched > 0) {
+    matchFooter = `${kpis.reconciliation_percentage ?? 0}% Match (${multiRateMatched} Multi-Rate)`;
+  }
+
   setText("kpiBooksTax", formatINR(kpis.total_tax_books ?? 0));
-  setText("kpiBooksCount", `${kpis.total_invoices_books ?? 0} Invoices in Ledger`);
+  setText("kpiBooksCount", booksFooter);
 
   setText("kpiPortalTax", formatINR(kpis.total_tax_2b ?? 0));
-  setText("kpiPortalCount", `${kpis.total_invoices_2b ?? 0} Invoices on Portal`);
+  setText("kpiPortalCount", portalFooter);
 
   setText("kpiMatchedTax", formatINR(kpis.matched_itc ?? 0));
-  setText("kpiMatchRate", `${kpis.reconciliation_percentage ?? 0}% Match Efficiency`);
+  setText("kpiMatchRate", matchFooter);
 
   setText("kpiRiskTax", formatINR(kpis.itc_at_risk ?? 0));
   setText("kpiRiskCount", `${kpis.itc_at_risk_count ?? 0} Invoices Missing in 2B`);
@@ -1614,7 +1646,16 @@ function renderTable() {
     const portalDate = row.inv_date_2b || "—";
 
     let booksInvDisplay = `<span class="code-font">${escHtml(rawBooksInv)}</span>`;
+    if ((row.books_line_count || 0) > 1) {
+      const slabInfo = row.books_slabs ? ` (${row.books_slabs})` : "";
+      booksInvDisplay += `<div style="font-size:0.68rem; color:#0f766e; font-weight:600; margin-top:2px;">${row.books_line_count} lines${escHtml(slabInfo)}</div>`;
+    }
+
     let portalInvDisplay = `<span class="code-font">${escHtml(rawPortalInv)}</span>`;
+    if ((row.portal_line_count || 0) > 1) {
+      const pSlabInfo = row.portal_slabs ? ` (${row.portal_slabs})` : "";
+      portalInvDisplay += `<div style="font-size:0.68rem; color:#0369a1; font-weight:600; margin-top:2px;">${row.portal_line_count} lines${escHtml(pSlabInfo)}</div>`;
+    }
 
     if (row.match_category === "TYPO_MATCH" || row.match_category === "PROBABLE_TYPO") {
       booksInvDisplay = `<span class="code-font diff-highlight" title="Books Invoice No">${escHtml(rawBooksInv)}</span>`;
@@ -1624,6 +1665,18 @@ function renderTable() {
     } else if (row.match_category === "MISSING_IN_BOOKS") {
       booksInvDisplay = `<span style="color:#0284c7; font-style:italic; font-size:0.75rem; background:rgba(2,132,199,0.1); padding:2px 8px; border-radius:4px;">Not in Books</span>`;
     }
+
+    const flagTags = [];
+    if (row.itc_ineligible) {
+      flagTags.push(`<span style="display:inline-block; background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-size:0.65rem; font-weight:700; padding:1px 5px; border-radius:3px; margin-top:3px;">INELIGIBLE ITC</span>`);
+    }
+    if (row.is_rcm) {
+      flagTags.push(`<span style="display:inline-block; background:#fef3c7; color:#b45309; border:1px solid #fcd34d; font-size:0.65rem; font-weight:700; padding:1px 5px; border-radius:3px; margin-top:3px;">RCM</span>`);
+    }
+    if (row.tax_head_mismatch) {
+      flagTags.push(`<span style="display:inline-block; background:#ffedd5; color:#c2410c; border:1px solid #fdba74; font-size:0.65rem; font-weight:700; padding:1px 5px; border-radius:3px; margin-top:3px;">TAX HEAD SWAP</span>`);
+    }
+    const extraTagsHtml = flagTags.length ? `<div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:2px;">${flagTags.join("")}</div>` : "";
 
     const taxDiff = (row.tax_diff !== null && row.tax_diff !== undefined && Math.abs(row.tax_diff) > 0.001)
       ? `<span style="font-weight:700; color:var(--status-mismatch-text);">${formatINR(row.tax_diff)}</span>`
@@ -1635,6 +1688,7 @@ function renderTable() {
           <span class="dot"></span>
           <span>${escHtml(badgeLabel)}</span>
         </span>
+        ${extraTagsHtml}
       </td>
       <td>
         <div class="cpty-name" style="font-weight:600; color:var(--text-primary);">${escHtml(cptyName)}</div>

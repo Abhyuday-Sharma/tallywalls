@@ -261,7 +261,7 @@ def _extract_df_from_bytes(contents: bytes, filename: str) -> pd.DataFrame:
             df = df.dropna(how="all")
             if not df.empty:
                 first_col = df.columns[0]
-                df = df[~df[first_col].astype(str).str.lower().str.contains("total|grand total", na=False)]
+                df = df[~df[first_col].astype(str).str.strip().str.lower().str.match(r"^(?:grand\s+|sub\s*[-\s]*)?total(?:\s*[:\-].*)?$", na=False)]
             return df
 
         except Exception as ex_excel:
@@ -448,12 +448,26 @@ async def reconcile_files(
     if len(dfs_2b) == 1:
         df_2b = dfs_2b[0]
     else:
-        df_2b = pd.concat(dfs_2b, ignore_index=True)
-        # Deduplicate overlapping rows across monthly statements
-        gstin_cols = [c for c in df_2b.columns if "gstin" in c.lower()]
-        inv_cols = [c for c in df_2b.columns if "invoice" in c.lower() and "number" in c.lower() or c.lower() in ("invoice number", "inum", "invoice no")]
+        # Tag each file index before concatenation so overlapping monthly statements
+        # deduplicate cleanly without dropping intra-statement multi-rate split rows.
+        tagged_dfs = []
+        for f_idx, d in enumerate(dfs_2b):
+            dc = d.copy()
+            dc["_tw_src_file_idx"] = f_idx
+            tagged_dfs.append(dc)
+        df_2b = pd.concat(tagged_dfs, ignore_index=True)
+
+        gstin_cols = [c for c in df_2b.columns if "gstin" in c.lower() or "gst no" in c.lower()]
+        inv_cols = [
+            c for c in df_2b.columns
+            if ("invoice" in c.lower() and "number" in c.lower())
+            or c.lower().strip() in ("invoice number", "inum", "invoice no")
+        ]
         if gstin_cols and inv_cols:
-            df_2b = df_2b.drop_duplicates(subset=[gstin_cols[0], inv_cols[0]], keep="last")
+            g_col, i_col = gstin_cols[0], inv_cols[0]
+            latest_file_idx = df_2b.groupby([g_col, i_col], dropna=False)["_tw_src_file_idx"].transform("max")
+            df_2b = df_2b[df_2b["_tw_src_file_idx"] == latest_file_idx]
+        df_2b = df_2b.drop(columns=["_tw_src_file_idx"], errors="ignore")
 
     df_books = await read_uploaded_file(file_books)
     if df_books.empty:

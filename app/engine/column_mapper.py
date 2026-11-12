@@ -12,20 +12,22 @@ import pandas as pd
 COLUMN_SYNONYMS = {
     "gstin": [
         "gstin of supplier", "supplier gstin", "gstin", "party gstin", "vendor gstin",
-        "gstin/uin of supplier", "gstin/uin", "party's gstin", "seller gstin", "supplier_gstin"
+        "gstin/uin of supplier", "gstin/uin", "party's gstin", "seller gstin", "supplier_gstin",
+        "gst no", "gst number", "gstno"
     ],
     "trade_name": [
         "trade/legal name", "legal name", "trade name", "supplier name", "party name",
-        "vendor name", "party", "supplier", "vendor", "account name", "particulars", "name"
+        "party's name", "vendor name", "party", "supplier", "vendor", "account name", "particulars", "name"
     ],
     "invoice_number": [
-        "invoice number", "invoice no.", "invoice no", "inv no.", "inv no", "bill no.",
-        "bill no", "voucher no.", "voucher no", "voucher ref no", "ref no.", "ref no",
-        "document number", "doc no", "invoice_no", "bill_number"
+        "supplier invoice no", "supplier invoice number", "supplier inv no",
+        "invoice number", "invoice no", "inv no", "bill no",
+        "document number", "doc no", "invoice_no", "bill_number",
+        "voucher ref no", "ref no", "voucher no"
     ],
     "invoice_date": [
-        "invoice date", "bill date", "date", "voucher date", "doc date", "document date",
-        "inv date", "invoice_date", "bill_date"
+        "supplier invoice date", "invoice date", "bill date", "inv date",
+        "voucher date", "doc date", "document date", "invoice_date", "bill_date", "date"
     ],
     "invoice_value": [
         "invoice value", "total value", "total amount", "invoice amount", "inv value",
@@ -36,8 +38,8 @@ COLUMN_SYNONYMS = {
         "assessable value", "net taxable", "base amount", "taxable"
     ],
     "total_tax": [
-        "total tax", "tax amount", "total tax amount", "tax", "gst amount",
-        "total gst", "tax value", "total tax (₹)", "gst (₹)"
+        "total tax", "tax amount", "total tax amount", "gst amount",
+        "total gst", "tax value", "total tax (₹)", "gst (₹)", "tax"
     ],
     "igst": [
         "integrated tax", "igst", "igst amount", "integrated tax (₹)", "integrated tax amount",
@@ -48,11 +50,22 @@ COLUMN_SYNONYMS = {
         "central gst", "c-gst"
     ],
     "sgst": [
-        "state/ut tax", "sgst", "sgst amount", "sgst/utgst", "state tax (₹)",
+        "state/ut tax", "state/ut gst", "sgst", "sgst amount", "sgst/utgst", "state tax (₹)",
         "state tax amount", "state gst", "s-gst", "utgst"
     ],
     "cess": [
         "cess", "cess amount", "cess (₹)", "compensation cess"
+    ],
+    "itc_availability": [
+        "itc availability", "itc available", "eligible itc", "eligibility", "itc status", "blocked itc",
+        "itc eligibility"
+    ],
+    "reverse_charge": [
+        "reverse charge", "rcm", "supply attract reverse charge", "attracts reverse charge",
+        "rcm applicable", "rev charge"
+    ],
+    "tax_rate": [
+        "rate%", "rate %", "gst rate", "tax rate", "rate of tax", "rate"
     ]
 }
 
@@ -71,32 +84,36 @@ def normalize_column_name(col: str) -> str:
 def detect_columns(df: pd.DataFrame) -> Dict[str, str]:
     """
     Given a DataFrame, detect which raw column corresponds to each standard field.
+    Iterates synonyms in priority order (e.g., Supplier Invoice No. beats Voucher No.).
     Returns dict: { standard_field: raw_column_name }
     """
     mapping: Dict[str, str] = {}
-    normalized_cols = {col: normalize_column_name(col) for col in df.columns}
+    normalized_cols = [(col, normalize_column_name(col)) for col in df.columns]
     used_cols = set()
 
-    # Pass 1: Exact matches against synonyms
+    # Pass 1: Exact matches respecting synonym priority order
     for standard_field, synonyms in COLUMN_SYNONYMS.items():
-        for raw_col, norm_col in normalized_cols.items():
-            if raw_col in used_cols:
-                continue
-            if norm_col in synonyms:
-                mapping[standard_field] = raw_col
-                used_cols.add(raw_col)
+        for syn in synonyms:
+            for raw_col, norm_col in normalized_cols:
+                if raw_col in used_cols:
+                    continue
+                if norm_col == syn:
+                    mapping[standard_field] = raw_col
+                    used_cols.add(raw_col)
+                    break
+            if standard_field in mapping:
                 break
 
-    # Pass 2: Substring matching for unmapped essential fields
+    # Pass 2: Substring word-boundary matching respecting synonym priority order
     for standard_field, synonyms in COLUMN_SYNONYMS.items():
         if standard_field in mapping:
             continue
-        for raw_col, norm_col in normalized_cols.items():
-            if raw_col in used_cols:
-                continue
-            for syn in synonyms:
-                # Substring check with word boundary caution
-                if re.search(r'\b' + re.escape(syn) + r'\b', norm_col):
+        for syn in synonyms:
+            pattern = r'\b' + re.escape(syn) + r'\b'
+            for raw_col, norm_col in normalized_cols:
+                if raw_col in used_cols:
+                    continue
+                if re.search(pattern, norm_col):
                     mapping[standard_field] = raw_col
                     used_cols.add(raw_col)
                     break
@@ -114,7 +131,7 @@ def find_table_header_row(file_path_or_buffer, sheet_name=0) -> int:
     preview = pd.read_excel(file_path_or_buffer, sheet_name=sheet_name, nrows=15, header=None)
     for idx, row in preview.iterrows():
         row_str = " ".join([str(v).lower() for v in row.values if pd.notna(v)])
-        if "gstin" in row_str or "invoice" in row_str or "voucher" in row_str:
+        if "gstin" in row_str or "gst no" in row_str or "invoice" in row_str or "voucher" in row_str:
             return idx
     return 0
 

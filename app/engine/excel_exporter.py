@@ -103,6 +103,13 @@ def _normalize_results_from_recon(recon_data: Dict[str, Any]) -> List[Dict[str, 
             "status_label": row.get("status_label") or status_labels.get(canonical_status, canonical_status),
             "books": books,
             "portal": portal,
+            "books_line_count": row.get("books_line_count", 1 if books else 0),
+            "portal_line_count": row.get("portal_line_count", 1 if portal else 0),
+            "books_slabs": row.get("books_slabs", ""),
+            "portal_slabs": row.get("portal_slabs", ""),
+            "itc_ineligible": bool(row.get("itc_ineligible", False)),
+            "is_rcm": bool(row.get("is_rcm", False)),
+            "tax_head_mismatch": bool(row.get("tax_head_mismatch", False)),
             "taxable_diff": row.get("taxable_diff", 0.0),
             "tax_diff": row.get("tax_diff", 0.0),
             "remarks": row.get("audit_remark") or "",
@@ -160,6 +167,12 @@ def export_reconciliation_excel(recon_data: Dict[str, Any]) -> BytesIO:
         ("Unbooked Purchases ITC (₹)", 0.00, summary.get("unbooked_tax", 0.0), summary.get("unbooked_tax", 0.0), "PENDING BOOKING"),
         ("Reconciliation Success Rate (%)", f"{summary.get('reconciliation_rate', 0.0)}%", "-", "-", "Benchmark: 95%+"),
     ]
+    if summary.get("ineligible_tax", 0.0) > 0:
+        kpi_rows.append(("Ineligible / Blocked ITC Excluded (₹)", summary.get("ineligible_tax", 0.0), summary.get("ineligible_tax", 0.0), 0.00, "DO NOT CLAIM (Sec 17(5))"))
+    if summary.get("rcm_tax", 0.0) > 0:
+        kpi_rows.append(("Reverse Charge (RCM) Supplies Tax (₹)", summary.get("rcm_tax", 0.0), summary.get("rcm_tax", 0.0), 0.00, "RCM LIABILITY / ITC"))
+    if summary.get("multi_rate_matched_count", 0) > 0:
+        kpi_rows.append(("Multi-Rate Split Bills Consolidated", summary.get("multi_rate_matched_count", 0), summary.get("multi_rate_matched_count", 0), 0, "Multi-rate resolved"))
 
     border = build_border()
     for row_idx, r_data in enumerate(kpi_rows, start=5):
@@ -175,19 +188,20 @@ def export_reconciliation_excel(recon_data: Dict[str, Any]) -> BytesIO:
                 cell.alignment = Alignment(horizontal="left", vertical="center")
 
             # Highlighting specific rows
-            if "VENDOR DEFAULT" in str(r_data[4]):
+            if "VENDOR DEFAULT" in str(r_data[4]) or "DO NOT CLAIM" in str(r_data[4]):
                 cell.fill = PatternFill(start_color=COLORS["MISSING_IN_2B"]["fill"], end_color=COLORS["MISSING_IN_2B"]["fill"], fill_type="solid")
             elif "PENDING BOOKING" in str(r_data[4]):
                 cell.fill = PatternFill(start_color=COLORS["MISSING_IN_BOOKS"]["fill"], end_color=COLORS["MISSING_IN_BOOKS"]["fill"], fill_type="solid")
 
     # Match Breakdown Table
-    ws_sum.cell(row=14, column=1, value="Classification Breakdown").font = Font(name="Calibri", size=12, bold=True, color=COLORS["primary_blue"])
+    brk_start_row = 5 + len(kpi_rows) + 2
+    ws_sum.cell(row=brk_start_row, column=1, value="Classification Breakdown").font = Font(name="Calibri", size=12, bold=True, color=COLORS["primary_blue"])
     breakdown_headers = ["Classification Status", "Invoice Count", "Percentage of Total", "Color Tag"]
     for col_idx, h in enumerate(breakdown_headers, start=1):
-        cell = ws_sum.cell(row=15, column=col_idx, value=h)
+        cell = ws_sum.cell(row=brk_start_row + 1, column=col_idx, value=h)
         cell.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
         cell.fill = PatternFill(start_color=COLORS["header_fill"], end_color=COLORS["header_fill"], fill_type="solid")
-    ws_sum.row_dimensions[15].height = 22
+    ws_sum.row_dimensions[brk_start_row + 1].height = 22
 
     total_invs = max(summary.get("total_books_invoices", 1), 1)
     breakdown_data = [
@@ -199,7 +213,7 @@ def export_reconciliation_excel(recon_data: Dict[str, Any]) -> BytesIO:
         ("Missing in Books (Unbooked)", summary.get("missing_in_books_count", 0), "-", "Blue"),
     ]
 
-    for row_idx, b_row in enumerate(breakdown_data, start=16):
+    for row_idx, b_row in enumerate(breakdown_data, start=brk_start_row + 2):
         ws_sum.row_dimensions[row_idx].height = 20
         for col_idx, val in enumerate(b_row, start=1):
             cell = ws_sum.cell(row=row_idx, column=col_idx, value=val)

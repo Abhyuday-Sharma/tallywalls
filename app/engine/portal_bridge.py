@@ -311,7 +311,7 @@ def parse_gstr2b_excel(file_or_path) -> pd.DataFrame:
     df = df.dropna(how="all")
     if not df.empty:
         first_col = df.columns[0]
-        df = df[~df[first_col].astype(str).str.lower().str.contains("total|grand total", na=False)]
+        df = df[~df[first_col].astype(str).str.strip().str.lower().str.match(r"^(?:grand\s+|sub\s*[-\s]*)?total(?:\s*[:\-].*)?$", na=False)]
 
     return df
 
@@ -1082,7 +1082,7 @@ def consolidate_gstr2b_statements(file_paths: List[str], fy: str = "2026-27") ->
     }
 
     dfs = []
-    for fp in file_paths:
+    for f_idx, fp in enumerate(file_paths):
         if not os.path.exists(fp):
             continue
         try:
@@ -1108,6 +1108,7 @@ def consolidate_gstr2b_statements(file_paths: List[str], fy: str = "2026-27") ->
 
                 if "Return Period" not in df.columns:
                     df["Return Period"] = period_tag
+                df["_tw_src_file_idx"] = f_idx
                 dfs.append(df)
         except Exception as ex:
             print(f"Warning: Failed to ingest statement '{fp}': {ex}")
@@ -1121,17 +1122,19 @@ def consolidate_gstr2b_statements(file_paths: List[str], fy: str = "2026-27") ->
     inv_col = None
     for col in merged_df.columns:
         cl = col.lower()
-        if "gstin" in cl and not gstin_col:
+        if ("gstin" in cl or "gst no" in cl) and not gstin_col:
             gstin_col = col
         if ("invoice number" in cl or "inum" in cl or "invoice no" in cl) and not inv_col:
             inv_col = col
 
     if gstin_col and inv_col:
         before_count = len(merged_df)
-        merged_df = merged_df.drop_duplicates(subset=[gstin_col, inv_col], keep="last")
+        latest_idx = merged_df.groupby([gstin_col, inv_col], dropna=False)["_tw_src_file_idx"].transform("max")
+        merged_df = merged_df[merged_df["_tw_src_file_idx"] == latest_idx]
         after_count = len(merged_df)
         if before_count != after_count:
             print(f"Portal Bridge: Deduplicated {before_count - after_count} overlapping invoices across monthly batches.")
+    merged_df = merged_df.drop(columns=["_tw_src_file_idx"], errors="ignore")
 
     try:
         consolidated_path = os.path.join(DOWNLOADS_DIR, f"GSTR2B_Consolidated_YTD_{fy.replace('-', '_')}.xlsx")
